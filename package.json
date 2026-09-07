@@ -38,14 +38,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/markedjs/marked-gitlab.git"
+    "url": "git+https://github.com/UziTech/marked-gitlab.git"
   },
   "author": "Tony Brix <Tony@Brix.ninja> (https://Tony.Brix.ninja)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/markedjs/marked-gitlab/issues"
+    "url": "https://github.com/UziTech/marked-gitlab/issues"
   },
-  "homepage": "https://github.com/markedjs/marked-gitlab#readme",
+  "homepage": "https://github.com/UziTech/marked-gitlab#readme",
   "peerDependencies": {
     "marked": ">=18 <19"
   },
