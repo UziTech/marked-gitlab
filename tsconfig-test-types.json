@@ -2,7 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "paths": {
-      "marked-extension-template": [
+      "marked-gitlab": [
         "./lib/index.d.ts"
       ]
     }

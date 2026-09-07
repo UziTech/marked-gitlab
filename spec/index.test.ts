@@ -1,17 +1,711 @@
 import { describe, test } from 'node:test';
 import { Marked } from 'marked';
-import markedExtensionTemplate from '../src/index.ts';
+import markedGitlab, {
+  generateGitlabSlug,
+  renderColorCode,
+  isColorCode,
+  parseGitlabReference,
+  renderEmoji,
+} from '../src/index.ts';
 
-describe('marked-extension-template', () => {
-  test('no options', (t) => {
-    const marked = new Marked();
-    marked.use(markedExtensionTemplate());
-    t.assert.snapshot(marked.parse('example markdown'));
+describe('marked-gitlab', () => {
+  describe('heading anchors and TOC', () => {
+    test('generates gitlab heading slugs with deduplication and special rules', (t) => {
+      const counts = new Map<string, number>();
+      t.assert.equal(generateGitlabSlug('This heading has spaces in it', counts), 'this-heading-has-spaces-in-it');
+      t.assert.equal(generateGitlabSlug('This heading has a :thumbsup: in it', counts), 'this-heading-has-a-thumbsup-in-it');
+      t.assert.equal(generateGitlabSlug('This heading has Unicode in it: 한글', counts), 'this-heading-has-unicode-in-it-한글');
+      t.assert.equal(generateGitlabSlug('This heading has spaces in it', counts), 'this-heading-has-spaces-in-it-1');
+      t.assert.equal(generateGitlabSlug('This heading has spaces in it', counts), 'this-heading-has-spaces-in-it-2');
+      t.assert.equal(generateGitlabSlug('This heading has 3.5 in it (and parentheses)', counts), 'this-heading-has-35-in-it-and-parentheses');
+      t.assert.equal(
+        generateGitlabSlug('This heading has  multiple spaces and --- hyphens_and_underscores', counts),
+        'this-heading-has--multiple-spaces-and-----hyphens_and_underscores',
+      );
+    });
+
+    test('renders headings with id and links [[_TOC_]]', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '[[_TOC_]]\n\n# Section One\n\n## Sub Section\n\n# Section Two\n';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<h1 id="section-one">Section One<\/h1>/);
+      t.assert.match(html, /<h2 id="sub-section">Sub Section<\/h2>/);
+      t.assert.match(html, /<h1 id="section-two">Section Two<\/h1>/);
+      t.assert.match(html, /<ul class="section-nav">/);
+      t.assert.match(html, /<a href="#section-one">Section One<\/a>/);
+      t.assert.match(html, /<a href="#sub-section">Sub Section<\/a>/);
+    });
+
+    test('supports [TOC] tag and deep nesting', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '[TOC]\n\n# H1\n\n## H2\n\n### H3\n\n# Back to H1\n';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<ul class="section-nav">/);
+      t.assert.match(html, /<a href="#h1">H1<\/a>/);
+      t.assert.match(html, /<a href="#h2">H2<\/a>/);
+      t.assert.match(html, /<a href="#h3">H3<\/a>/);
+      t.assert.match(html, /<a href="#back-to-h1">Back to H1<\/a>/);
+    });
+
+    test('renders TOC with consecutive same-depth headings', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '[[_TOC_]]\n\n# H1 A\n\n# H1 B\n\n## H2 A\n\n## H2 B\n';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<a href="#h1-a">H1 A<\/a><\/li>\n<li><a href="#h1-b">H1 B<\/a>/);
+      t.assert.match(html, /<a href="#h2-a">H2 A<\/a><\/li>\n<li><a href="#h2-b">H2 B<\/a>/);
+    });
+
+    test('TOC with no headings returns empty string', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const html = marked.parse('[[_TOC_]]\n\nJust text, no headings.') as string;
+      t.assert.doesNotMatch(html, /<ul class="section-nav">/);
+    });
+
+    test('options headingAnchors and tableOfContents can be disabled', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ headingAnchors: false, tableOfContents: false }));
+      const html = marked.parse('[TOC]\n\n# No Anchor\n') as string;
+
+      t.assert.doesNotMatch(html, /<h1 id=/);
+      t.assert.doesNotMatch(html, /<ul class="section-nav">/);
+    });
   });
 
-  test('markdown not using this extension', (t) => {
-    const marked = new Marked();
-    marked.use(markedExtensionTemplate());
-    t.assert.snapshot(marked.parse('not example markdown'));
+  describe('multiline blockquotes and alerts', () => {
+    test('renders multiline blockquotes with >>>', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '>>>\nLine 1\n\nLine 2\n>>>';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<blockquote>\s*<p>Line 1<\/p>\s*<p>Line 2<\/p>\s*<\/blockquote>/);
+    });
+
+    test('renders multiline blockquote with unknown alert type as regular blockquote', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '>>> [!unknown] Not an alert\nBody text\n>>>';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<blockquote>/);
+      t.assert.doesNotMatch(html, /markdown-alert/);
+    });
+
+    test('renders multiline blockquote alert with custom title', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '>>> [!warning] Data deletion\nThe following will delete data.\n>>>';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<div class="markdown-alert markdown-alert-warning">/);
+      t.assert.match(html, /<p class="markdown-alert-title">Data deletion<\/p>/);
+      t.assert.match(html, /<p>The following will delete data\.<\/p>/);
+    });
+
+    test('renders multiline blockquote alert with default capitalized title', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '>>> [!note]\nDefault title note.\n>>>';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<div class="markdown-alert markdown-alert-note">/);
+      t.assert.match(html, /<p class="markdown-alert-title">Note<\/p>/);
+    });
+
+    test('renders standard blockquote alerts with > [!note]', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '> [!note]\n> This is useful information.';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<div class="markdown-alert markdown-alert-note">/);
+      t.assert.match(html, /<p class="markdown-alert-title">Note<\/p>/);
+      t.assert.match(html, /<p>This is useful information\.<\/p>/);
+    });
+
+    test('renders standard blockquote alert with no following body', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '> [!note]';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<div class="markdown-alert markdown-alert-note">/);
+      t.assert.match(html, /<p class="markdown-alert-title">Note<\/p>/);
+    });
+
+    test('renders all alert types: tip, important, caution, warning', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const types = ['tip', 'important', 'caution', 'warning'];
+
+      for (const kind of types) {
+        const input = `> [!${kind}] Custom ${kind}\n> Content of ${kind}`;
+        const html = marked.parse(input) as string;
+        t.assert.match(html, new RegExp(`<div class="markdown-alert markdown-alert-${kind}">`));
+        t.assert.match(html, new RegExp(`<p class="markdown-alert-title">Custom ${kind}</p>`));
+      }
+    });
+
+    test('standard blockquote without alert is preserved', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '> Just a normal quote';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<blockquote>\s*<p>Just a normal quote<\/p>\s*<\/blockquote>/);
+    });
+
+    test('alerts can be disabled in options', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ alerts: false, multilineBlockquotes: false }));
+      const input = '> [!note]\n> Just quote';
+      const html = marked.parse(input) as string;
+
+      t.assert.doesNotMatch(html, /markdown-alert/);
+    });
+  });
+
+  describe('colors', () => {
+    test('recognizes HEX, RGB, HSL color codes in backticks', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '- `#F00`\n- `#FF0000AA`\n- `RGB(0,255,0)`\n- `RGBA(0,255,0,0.3)`\n- `HSL(540,70%,50%)`\n- `HSLA(540,70%,50%,0.3)`';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<span class="gl-color-chip" style="background-color: #F00;"><\/span>#F00/);
+      t.assert.match(html, /<span class="gl-color-chip" style="background-color: #FF0000AA;"><\/span>#FF0000AA/);
+      t.assert.match(html, /<span class="gl-color-chip" style="background-color: RGB\(0,255,0\);"><\/span>RGB\(0,255,0\)/);
+      t.assert.match(html, /<span class="gl-color-chip" style="background-color: RGBA\(0,255,0,0.3\);"><\/span>RGBA\(0,255,0,0.3\)/);
+      t.assert.match(html, /<span class="gl-color-chip" style="background-color: HSL\(540,70%,50%\);"><\/span>HSL\(540,70%,50%\)/);
+      t.assert.match(html, /<span class="gl-color-chip" style="background-color: HSLA\(540,70%,50%,0.3\);"><\/span>HSLA\(540,70%,50%,0.3\)/);
+    });
+
+    test('escapes color codes with backslash to omit color chip', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '- `\\#FF0000`\n- `\\RGB(255,0,0)`\n- `\\HSL(0,100%,50%)`';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<code>#FF0000<\/code>/);
+      t.assert.match(html, /<code>RGB\(255,0,0\)<\/code>/);
+      t.assert.match(html, /<code>HSL\(0,100%,50%\)<\/code>/);
+      t.assert.doesNotMatch(html, /gl-color-chip/);
+    });
+
+    test('does not affect regular codespans', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const html = marked.parse('`const x = 10;`') as string;
+      t.assert.match(html, /<code>const x = 10;<\/code>/);
+      t.assert.doesNotMatch(html, /gl-color-chip/);
+    });
+
+    test('color helper functions test edge cases', (t) => {
+      t.assert.equal(isColorCode('not-a-color'), false);
+      t.assert.equal(renderColorCode('not-a-color'), false);
+      t.assert.equal(renderColorCode('\\not-a-color'), false);
+    });
+
+    test('colorChips can be disabled in options', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ colorChips: false }));
+      const html = marked.parse('`#FF0000`') as string;
+      t.assert.doesNotMatch(html, /gl-color-chip/);
+    });
+  });
+
+  describe('description lists', () => {
+    test('renders single and multiple terms with descriptions', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = 'Fruits\n: apple\n: orange\n\nVegetables\n: broccoli\n: kale';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<dl>/);
+      t.assert.match(html, /<dt>Fruits<\/dt>/);
+      t.assert.match(html, /<dd>apple<\/dd>/);
+      t.assert.match(html, /<dd>orange<\/dd>/);
+      t.assert.match(html, /<dt>Vegetables<\/dt>/);
+      t.assert.match(html, /<dd>broccoli<\/dd>/);
+    });
+
+    test('handles blank line between term and description', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = 'Fruits\n\n: apple\n\n: orange';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<dl>\s*<dt>Fruits<\/dt>\s*<dd>apple<\/dd>\s*<dd>orange<\/dd>\s*<\/dl>/);
+    });
+
+    test('renders consecutive terms without blank lines between items', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = 'First\n: desc 1\nSecond\n: desc 2';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<dt>First<\/dt>\s*<dd>desc 1<\/dd>\s*<dt>Second<\/dt>\s*<dd>desc 2<\/dd>/);
+    });
+
+    test('supports inline formatting in description lists', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '**Important Term**\n: *italic* description and `code`';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<dt><strong>Important Term<\/strong><\/dt>/);
+      t.assert.match(html, /<dd><em>italic<\/em> description and <code>code<\/code><\/dd>/);
+    });
+
+    test('descriptionLists can be disabled in options', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ descriptionLists: false }));
+      const input = 'Fruits\n: apple';
+      const html = marked.parse(input) as string;
+
+      t.assert.doesNotMatch(html, /<dl>/);
+    });
+  });
+
+  describe('inline diffs', () => {
+    test('renders additions and deletions with curly braces and brackets', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '- {+ addition 1 +}\n- [+ addition 2 +]\n- {- deletion 1 -}\n- [- deletion 2 -]';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<ins class="diff addition">addition 1<\/ins>/);
+      t.assert.match(html, /<ins class="diff addition">addition 2<\/ins>/);
+      t.assert.match(html, /<del class="diff deletion">deletion 1<\/del>/);
+      t.assert.match(html, /<del class="diff deletion">deletion 2<\/del>/);
+    });
+
+    test('supports inline formatting inside diffs', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '{+ Added **bold** text +}';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<ins class="diff addition">Added <strong>bold<\/strong> text<\/ins>/);
+    });
+
+    test('inlineDiffs can be disabled in options', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ inlineDiffs: false }));
+      const input = '{+ addition +}';
+      const html = marked.parse(input) as string;
+
+      t.assert.doesNotMatch(html, /<ins class="diff addition">/);
+    });
+  });
+
+  describe('task lists', () => {
+    test('renders inapplicable [~] tasks with data-inapplicable', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '- [x] Completed\n- [~] Inapplicable\n- [ ] Incomplete\n- [~]';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<li class="task-list-item"><input type="checkbox" disabled class="task-list-item-checkbox" checked> Completed<\/li>/);
+      t.assert.match(html, /<li class="task-list-item"><input type="checkbox" disabled class="task-list-item-checkbox" data-inapplicable="true"> Inapplicable<\/li>/);
+      t.assert.match(html, /<li class="task-list-item"><input type="checkbox" disabled class="task-list-item-checkbox"> Incomplete<\/li>/);
+      t.assert.match(html, /<li class="task-list-item"><input type="checkbox" disabled class="task-list-item-checkbox" data-inapplicable="true"> <\/li>/);
+    });
+
+    test('preserves normal non-task list items', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const html = marked.parse('- Normal item') as string;
+      t.assert.match(html, /<li>Normal item<\/li>/);
+      t.assert.doesNotMatch(html, /task-list-item/);
+    });
+
+    test('taskLists can be disabled in options', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ taskLists: false }));
+      const html = marked.parse('- [x] Task') as string;
+      t.assert.match(html, /<input/);
+    });
+  });
+
+  describe('multimedia', () => {
+    test('renders video players for valid video extensions', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '![Sample Video](img/video.mp4 "Video Title")';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<video src="img\/video\.mp4" controls title="Video Title"><a href="img\/video\.mp4">Sample Video<\/a><\/video>/);
+    });
+
+    test('renders audio players for valid audio extensions', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '![Sample Audio](audio.mp3 "Audio Title")';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<audio src="audio\.mp3" controls title="Audio Title"><a href="audio\.mp3">Sample Audio<\/a><\/audio>/);
+    });
+
+    test('renders images with width and height dimensions', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '![GitLab Logo](img/logo.png "GitLab"){width=100 height=50px}\n\n![GitLab Logo](img/logo.png){width=75%}\n\n![GitLab Logo](img/logo.png){height=40px}';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<img src="img\/logo\.png" alt="GitLab Logo" title="GitLab" width="100" height="50">/);
+      t.assert.match(html, /<img src="img\/logo\.png" alt="GitLab Logo" width="75%">/);
+      t.assert.match(html, /<img src="img\/logo\.png" alt="GitLab Logo" height="40">/);
+    });
+
+    test('renders video players for valid video extensions without exclamation', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '[Sample Video](img/video.mp4)';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<video src="img\/video\.mp4" controls><a href="img\/video\.mp4">Sample Video<\/a><\/video>/);
+    });
+
+    test('standard images without dimensions or media extensions use standard img', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const html = marked.parse('![Standard](img/pic.png)') as string;
+      t.assert.match(html, /<img src="img\/pic\.png" alt="Standard">/);
+    });
+
+    test('multimedia can be disabled in options', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ multimedia: false }));
+      const html = marked.parse('![Sample Video](img/video.mp4)') as string;
+      t.assert.doesNotMatch(html, /<video/);
+    });
+  });
+
+  describe('diagrams, math, and JSON tables', () => {
+    test('renders mermaid, plantuml, and kroki code blocks', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '```mermaid\ngraph TD\nA-->B\n```\n\n```plantuml\nBob -> Alice\n```\n\n```kroki\nblock\n```';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<pre class="mermaid"><code>graph TD\nA--&gt;B<\/code><\/pre>/);
+      t.assert.match(html, /<pre class="plantuml"><code>Bob -&gt; Alice<\/code><\/pre>/);
+      t.assert.match(html, /<pre class="kroki"><code>block<\/code><\/pre>/);
+    });
+
+    test('renders math code blocks and inline math', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '```math\na^2+b^2=c^2\n```\n\nInline: $`x+y=z`$ and $$a+b$$ and $c+d$';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<div class="gl-math-block" data-math-style="display">a\^2\+b\^2=c\^2<\/div>/);
+      t.assert.match(html, /<span class="gl-math-inline" data-math-style="inline">x\+y=z<\/span>/);
+      t.assert.match(html, /<span class="gl-math-inline" data-math-style="inline">a\+b<\/span>/);
+      t.assert.match(html, /<span class="gl-math-inline" data-math-style="inline">c\+d<\/span>/);
+    });
+
+    test('renders JSON tables with custom fields, caption, sortable, and markdown', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '```json:table\n{\n  "fields": [{"key": "a", "label": "AA", "sortable": true}, {"key": "no_label"}, "b"],\n  "items": [{"a": "**11**", "no_label": "NL", "b": "#123"}, {"a": "22"}],\n  "caption": "Custom Caption",\n  "markdown": true\n}\n```';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<table class="gl-table gl-json-table">/);
+      t.assert.match(html, /<caption>Custom Caption<\/caption>/);
+      t.assert.match(html, /<th>AA <span class="sortable">↕<\/span><\/th>/);
+      t.assert.match(html, /<th>no_label<\/th>/);
+      t.assert.match(html, /<th>b<\/th>/);
+      t.assert.match(html, /<td><strong>11<\/strong><\/td>/);
+    });
+
+    test('renders JSON table with inferred fields', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '```json:table\n{\n  "items": [{"col1": "val1", "col2": "val2"}]\n}\n```';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<th>col1<\/th>/);
+      t.assert.match(html, /<th>col2<\/th>/);
+      t.assert.match(html, /<td>val1<\/td>/);
+      t.assert.match(html, /<caption>Generated with JSON data<\/caption>/);
+    });
+
+    test('renders error for invalid JSON table', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '```json:table\n{ not valid json }\n```';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<div class="gl-json-table-error"><p>Invalid JSON table<\/p>/);
+    });
+
+    test('renders empty JSON table with default caption', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '```json:table\n{}\n```';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<caption>Generated with JSON data<\/caption>/);
+    });
+
+    test('standard code blocks without diagram/math/json are preserved', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '```javascript\nconsole.log(1);\n```\n\n```\nplain\n```';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<pre><code class="language-javascript">console\.log\(1\);\n<\/code><\/pre>/);
+      t.assert.match(html, /<pre><code>plain\n<\/code><\/pre>/);
+    });
+
+    test('diagrams, math, jsonTables can be disabled in options', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ diagrams: false, math: false, jsonTables: false }));
+      const input = '```mermaid\nA-->B\n```\n\n```math\n1+1\n```\n\n```json:table\n{}\n```';
+      const html = marked.parse(input) as string;
+
+      t.assert.doesNotMatch(html, /<pre class="mermaid">/);
+      t.assert.doesNotMatch(html, /gl-math-block/);
+      t.assert.doesNotMatch(html, /gl-json-table/);
+    });
+  });
+
+  describe('front matter, placeholders, and includes', () => {
+    test('renders YAML front matter by default', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '---\ntitle: Hello\nexample: yaml\n---\n# Post Content';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<pre class="gl-front-matter" data-lang="yaml"><code>title: Hello\nexample: yaml<\/code><\/pre>/);
+      t.assert.match(html, /<h1 id="post-content">Post Content<\/h1>/);
+    });
+
+    test('renders TOML, JSON, and custom lang front matter', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const tomlInput = '+++\ntitle = "TOML"\n+++\nContent';
+      const jsonInput = ';;;\n{"title": "JSON"}\n;;;\nContent';
+      const phpInput = '---php\n$title = "PHP";\n---\nContent';
+
+      t.assert.match(marked.parse(tomlInput) as string, /data-lang="toml"/);
+      t.assert.match(marked.parse(jsonInput) as string, /data-lang="json"/);
+      t.assert.match(marked.parse(phpInput) as string, /data-lang="php"/);
+    });
+
+    test('strips front matter when frontMatter: false', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ frontMatter: false }));
+      const input = '---\ntitle: Strip Me\n---\n# Header';
+      const html = marked.parse(input) as string;
+
+      t.assert.doesNotMatch(html, /gl-front-matter/);
+      t.assert.doesNotMatch(html, /Strip Me/);
+      t.assert.match(html, /<h1 id="header">Header<\/h1>/);
+    });
+
+    test('replaces placeholders with configured values', (t) => {
+      const marked = new Marked();
+      marked.use(
+        markedGitlab({
+          placeholders: {
+            project_name: 'marked-gitlab',
+            gitlab_server: 'gitlab.com',
+          },
+        }),
+      );
+      const input = 'Welcome to %{project_name} on %{gitlab_server} (%{unknown_key})';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /Welcome to marked-gitlab on gitlab\.com \(%\{unknown_key\}\)/);
+    });
+
+    test('placeholders can be disabled in options', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ placeholders: false as unknown as Record<string, string> }));
+      const input = 'Hello %{name}';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /Hello %\{name\}/);
+    });
+
+    test('replaces ::include directive with includeHandler result', (t) => {
+      const marked = new Marked();
+      marked.use(
+        markedGitlab({
+          includeHandler: (file) => (file === 'part.md' ? '### Included Title\n' : undefined),
+        }),
+      );
+      const input = 'Before\n::include{file=part.md}\n::include{file=missing.md}\nAfter';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<h3 id="included-title">Included Title<\/h3>/);
+      t.assert.match(html, /::include\{file=missing\.md\}/);
+    });
+  });
+
+  describe('GitLab references', () => {
+    test('parses mentions, issues, MRs, snippets, epics', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ project: 'gitlab-org/gitlab' }));
+      const input = 'Mention @user and @group/subgroup and @all. See #123, !456, $789, and &999.';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/user" class="gfm gfm-project_member">@user<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/group\/subgroup" class="gfm gfm-project_member">@group\/subgroup<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/123" class="gfm gfm-issue">#123<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/merge_requests\/456" class="gfm gfm-merge_request">!456<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/snippets\/789" class="gfm gfm-snippet">\$789<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/epics\/999" class="gfm gfm-epic">&amp;999<\/a>/);
+    });
+
+    test('parses cross-project references and title suffixes (+ and +s)', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ project: 'default/proj' }));
+      const input = 'See other/proj#42 and #100+ and !200+s.';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/other\/proj\/-\/issues\/42" class="gfm gfm-issue">other\/proj#42<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/default\/proj\/-\/issues\/100" class="gfm gfm-issue" title="Show issue title">#100\+<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/default\/proj\/-\/merge_requests\/200" class="gfm gfm-merge_request" title="Show merge_request summary">!200\+s<\/a>/);
+    });
+
+    test('parses labels, milestones, iterations, alerts, contacts, wikis', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ project: 'my/proj' }));
+      const input = 'Label ~bug and ~"feature request" and milestone %v1.0 and %"release 2".\n'
+        + 'Iteration *iteration:"Sprint 1". Alert ^alert#123. Contact [contact:test@example.com].\n'
+        + 'Wiki [[Home]] and [[User Guide|user-guide]].';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /class="gfm gfm-label">~bug<\/a>/);
+      t.assert.match(html, /class="gfm gfm-label">~&quot;feature request&quot;<\/a>/);
+      t.assert.match(html, /class="gfm gfm-milestone" title="v1\.0">%v1\.0<\/a>/);
+      t.assert.match(html, /class="gfm gfm-milestone" title="release 2">%(&quot;|")release 2(&quot;|")<\/a>/);
+      t.assert.match(html, /class="gfm gfm-iteration" title="Sprint 1">\*iteration:&quot;Sprint 1&quot;<\/a>/);
+      t.assert.match(html, /class="gfm gfm-alert">\^alert#123<\/a>/);
+      t.assert.match(html, /<a href="mailto:test@example\.com" class="gfm gfm-contact">\[contact:test@example\.com\]<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/wikis\/Home" class="gfm gfm-wiki_page">Home<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/wikis\/user-guide" class="gfm gfm-wiki_page">User Guide<\/a>/);
+    });
+
+    test('parses bracket references and commits', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ project: 'my/proj' }));
+      const input = '[issue:123] [work_item:456] [epic:789] [cadence:1] [vulnerability:10] [feature_flag:20] [wiki_page:Help].\n'
+        + 'Commit other@9ba12248 and range 9ba12248...b19a04f5.';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /class="gfm gfm-issue">\[issue:123\]<\/a>/);
+      t.assert.match(html, /class="gfm gfm-work_item">\[work_item:456\]<\/a>/);
+      t.assert.match(html, /class="gfm gfm-epic">\[epic:789\]<\/a>/);
+      t.assert.match(html, /class="gfm gfm-cadence">\[cadence:1\]<\/a>/);
+      t.assert.match(html, /class="gfm gfm-vulnerability">\[vulnerability:10\]<\/a>/);
+      t.assert.match(html, /class="gfm gfm-feature_flag">\[feature_flag:20\]<\/a>/);
+      t.assert.match(html, /class="gfm gfm-wiki_page">\[wiki_page:Help\]<\/a>/);
+      t.assert.match(html, /class="gfm gfm-commit">other@9ba12248<\/a>/);
+      t.assert.match(html, /class="gfm gfm-commit_range">9ba12248\.\.\.b19a04f5<\/a>/);
+    });
+
+    test('escaped references are not linked and backslash is removed', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '\\#123 and \\@user and \\!456 and \\~bug and \\%v1.0 and \\$789 and \\&999 and \\^alert#1';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /#123 and @user and !456 and ~bug and %v1\.0 and \$789 and &amp;999/);
+      t.assert.doesNotMatch(html, /class="gfm /);
+    });
+
+    test('references can be disabled in options', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ references: false }));
+      const html = marked.parse('#123 and @user') as string;
+
+      t.assert.doesNotMatch(html, /class="gfm /);
+    });
+
+    test('parseGitlabReference returns null for non-references', (t) => {
+      t.assert.equal(parseGitlabReference('plain text'), null);
+      t.assert.equal(parseGitlabReference('\\#123'), null);
+    });
+
+    test('parses cross-project references and standalone commit SHAs', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ project: 'my/proj' }));
+      const input = 'Bracket: [issue:gitlab-org/gitlab/999].\n'
+        + 'Commit 0123456789abcdef0123456789abcdef01234567 and range group/repo@9ba12248...b19a04f5.\n'
+        + 'Cross-proj alert other/group^alert#42, label other/group~bug, milestone other/group%1.0.\n'
+        + 'Wiki [[WikiNoSlug]].';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/999" class="gfm gfm-issue">\[issue:gitlab-org\/gitlab\/999\]<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/commit\/0123456789abcdef0123456789abcdef01234567" class="gfm gfm-commit">0123456789abcdef0123456789abcdef01234567<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/group\/repo\/-\/compare\/9ba12248\.\.\.b19a04f5" class="gfm gfm-commit_range">group\/repo@9ba12248\.\.\.b19a04f5<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/other\/group\/-\/alert_management\/42" class="gfm gfm-alert">other\/group\^alert#42<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/other\/group\/-\/issues\?label_name=bug" class="gfm gfm-label">other\/group~bug<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/other\/group\/-\/milestones" class="gfm gfm-milestone" title="1\.0">other\/group%1\.0<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/wikis\/WikiNoSlug" class="gfm gfm-wiki_page">WikiNoSlug<\/a>/);
+    });
+
+    test('parseGitlabReference handles custom base URLs and defaults', (t) => {
+      const refDefault = parseGitlabReference('#123');
+      t.assert.equal(refDefault?.href, 'https://gitlab.com/-/issues/123');
+
+      const refCustom = parseGitlabReference('#123', 'https://custom-gitlab.com/', '/org/proj/');
+      t.assert.equal(refCustom?.href, 'https://custom-gitlab.com/org/proj/-/issues/123');
+    });
+  });
+
+  describe('emojis', () => {
+    test('replaces standard emoji shortcodes with gl-emoji tag', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = 'Thumbs up :thumbsup: and a heart :heart:!';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<gl-emoji data-name="thumbsup" title=":thumbsup:">👍<\/gl-emoji>/);
+      t.assert.match(html, /<gl-emoji data-name="heart" title=":heart:">❤️<\/gl-emoji>/);
+    });
+
+    test('supports custom emoji mapping in options', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ emojis: { custom_fox: '🦊' } }));
+      const input = 'Custom :custom_fox: and fallback :thumbsup:';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<gl-emoji data-name="custom_fox" title=":custom_fox:">🦊<\/gl-emoji>/);
+      t.assert.match(html, /<gl-emoji data-name="thumbsup" title=":thumbsup:">👍<\/gl-emoji>/);
+    });
+
+    test('unknown emoji code is left unchanged', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const html = marked.parse(':not_real_emoji_xyz:') as string;
+
+      t.assert.match(html, /:not_real_emoji_xyz:/);
+      t.assert.doesNotMatch(html, /<gl-emoji/);
+    });
+
+    test('emojis can be disabled in options', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ emojis: false }));
+      const html = marked.parse(':thumbsup:') as string;
+
+      t.assert.doesNotMatch(html, /<gl-emoji/);
+    });
+
+    test('renderEmoji returns false for missing emoji', (t) => {
+      t.assert.equal(renderEmoji('nonexistent_emoji_abc'), false);
+    });
   });
 });

@@ -1,8 +1,10 @@
 import { describe, test } from 'node:test';
 import '../lib/index.umd.js';
 
-describe('marked-extension-template umd', () => {
+declare const markedGitlab: unknown;
+
+describe('marked-gitlab umd', () => {
   test('test umd global', (t) => {
-    t.assert.equal(typeof markedExtensionTemplate, 'function');
+    t.assert.equal(typeof markedGitlab, 'function');
   });
 });

@@ -1,14 +1,17 @@
 {
-  "name": "marked-extension-template",
+  "name": "marked-gitlab",
   "version": "0.0.0",
-  "description": "marked extension template",
+  "description": "marked extension for GitLab Flavored Markdown (GLFM)",
   "main": "./lib/index.esm.js",
   "module": "./lib/index.esm.js",
   "browser": "./lib/index.umd.js",
   "type": "module",
   "keywords": [
     "marked",
-    "extension"
+    "extension",
+    "gitlab",
+    "glfm",
+    "markdown"
   ],
   "files": [
     "lib/",
@@ -35,14 +38,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/markedjs/marked-extension-template.git"
+    "url": "git+https://github.com/markedjs/marked-gitlab.git"
   },
   "author": "Tony Brix <Tony@Brix.ninja> (https://Tony.Brix.ninja)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/markedjs/marked-extension-template/issues"
+    "url": "https://github.com/markedjs/marked-gitlab/issues"
   },
-  "homepage": "https://github.com/markedjs/marked-extension-template#readme",
+  "homepage": "https://github.com/markedjs/marked-gitlab#readme",
   "peerDependencies": {
     "marked": ">=18 <19"
   },
