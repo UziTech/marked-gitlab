@@ -12,8 +12,12 @@ export function parseGitlabReference(
   baseUrl = 'https://gitlab.com',
   defaultProject = '',
 ): ReferenceMatch | null {
-  // Escaped references: e.g. \#123, \@user, \!123, \~label, \%milestone, \&123, \$123, \^alert#123
-  if (/^\\([@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):)/i.test(src)) {
+  // Escaped references: e.g. \#123, \@user, \!123, \~label, \%milestone, \&123, \$123, \^alert#123, \GL-123, \group/project>
+  if (
+    /^\\([@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):|[A-Z]{2,}[A-Z0-9_]*-\d+|(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+>)/i.test(
+      src,
+    )
+  ) {
     return null;
   }
 
@@ -33,6 +37,12 @@ export function parseGitlabReference(
       href = `mailto:${target}`;
     } else if (kind === 'wiki_page') {
       href = `${projectBase}/-/wikis/${target}`;
+    } else if (kind === 'cadence') {
+      const cleanTarget = target.replace(/^"(.*)"$/, '$1');
+      const isId = /^\d+$/.test(cleanTarget);
+      href = isId
+        ? `${projectBase}/-/cadences/${cleanTarget}`
+        : `${projectBase}/-/cadences?title=${encodeURIComponent(cleanTarget)}`;
     } else {
       const parts = target.split('/');
       const id = parts.pop()!;
@@ -41,7 +51,6 @@ export function parseGitlabReference(
         issue: 'issues',
         work_item: 'work_items',
         epic: 'epics',
-        cadence: 'cadences',
         vulnerability: 'security/vulnerabilities',
         feature_flag: 'feature_flags',
       };
@@ -54,6 +63,88 @@ export function parseGitlabReference(
       text: bracketMatch[0],
       className,
     };
+  }
+
+  // Project reference shorthand: namespace/project>
+  const projectMatch = src.match(/^((?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+)>/);
+  if (projectMatch) {
+    const target = projectMatch[1];
+    return {
+      raw: projectMatch[0],
+      type: 'project',
+      href: `${cleanBaseUrl}/${target}`,
+      text: target,
+      className: 'gfm gfm-project',
+    };
+  }
+
+  // Issue tracker key: GL-123 or PROJ-456
+  const issueKeyMatch = src.match(/^([A-Z]{2,}[A-Z0-9_]*-\d+)(\+s|\+)?/);
+  if (issueKeyMatch) {
+    const key = issueKeyMatch[1];
+    const suffix = issueKeyMatch[2];
+    return {
+      raw: issueKeyMatch[0],
+      type: 'issue',
+      href: `${projectBase}/-/issues/${key}`,
+      text: issueKeyMatch[0],
+      className: 'gfm gfm-issue',
+      title: suffix ? `Show issue ${suffix === '+s' ? 'summary' : 'title'}` : undefined,
+    };
+  }
+
+  // GitLab URL references (comments, designs, wikis)
+  const gitlabUrlMatch = src.match(
+    /^https?:\/\/[^\s/]+(?:\/groups)?\/((?:(?!-\/)[a-zA-Z0-9_\-.]+\/)*(?!-\/)[a-zA-Z0-9_\-.]+)\/(?:-\/)?(issues|merge_requests|epics|wikis)(?:\/([^\s#?]+))?(?:#note_(\d+))?/,
+  );
+  if (gitlabUrlMatch) {
+    let rawUrl = gitlabUrlMatch[0];
+    const punctMatch = rawUrl.match(/[.,;)]+$/);
+    if (punctMatch) {
+      rawUrl = rawUrl.slice(0, -punctMatch[0].length);
+    }
+    const [, , resource, sub, noteId] = gitlabUrlMatch;
+    let cleanSub = sub;
+    if (punctMatch && cleanSub) {
+      cleanSub = cleanSub.replace(/[.,;)]+$/, '');
+    }
+    let text = '';
+    let type = '';
+    let className = '';
+
+    if (resource === 'wikis' && cleanSub) {
+      type = 'wiki_page';
+      className = 'gfm gfm-wiki_page';
+      text = decodeURIComponent(cleanSub).replace(/-/g, ' ');
+    } else if (noteId && cleanSub) {
+      const id = cleanSub.split('/')[0];
+      const sigil = resource === 'merge_requests' ? '!' : resource === 'epics' ? '&' : '#';
+      type = resource === 'merge_requests' ? 'merge_request' : resource === 'epics' ? 'epic' : 'issue';
+      className = `gfm gfm-${type}`;
+      text = `${sigil}${id} (comment ${noteId})`;
+    } else if (resource === 'issues' && cleanSub) {
+      type = 'issue';
+      className = 'gfm gfm-issue';
+      const subParts = cleanSub.split('/');
+      const id = subParts[0];
+      if (subParts[1] === 'designs') {
+        if (subParts[2]) {
+          text = `#${id}[${decodeURIComponent(subParts[2])}]`;
+        } else {
+          text = `#${id} (designs)`;
+        }
+      }
+    }
+
+    if (text) {
+      return {
+        raw: rawUrl,
+        type,
+        href: rawUrl,
+        text,
+        className,
+      };
+    }
   }
 
   // Wiki page: [[Page]] or [[Title|slug]]

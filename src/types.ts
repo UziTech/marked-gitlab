@@ -75,6 +75,11 @@ export interface MarkedGitlabOptions {
   jsonTables?: boolean;
 
   /**
+   * Enable GitLab Query Language (GLQL) blocks (default: true)
+   */
+  glql?: boolean;
+
+  /**
    * Enable front matter handling (default: true)
    */
   frontMatter?: boolean;

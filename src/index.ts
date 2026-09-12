@@ -112,6 +112,7 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
     diagrams = true,
     math = true,
     jsonTables = true,
+    glql = true,
     frontMatter = true,
     footnotes = true,
     placeholders = {},
@@ -465,10 +466,10 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
       level: 'inline',
       start(src) {
         const escIdx = src.search(
-          /\\(?:[@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):)/,
+          /\\(?:[@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):|[A-Z]{2,}[A-Z0-9_]*-\d+|(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+>)/,
         );
         const sigilIdx = src.search(
-          /[@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):|\[\[|\*iteration:/,
+          /[@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):|\[\[|\*iteration:|[A-Z]{2,}[A-Z0-9_]*-\d+|(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+>|https?:\/\/[^\s/]+(?:\/groups)?\/[a-zA-Z0-9_\-.]+\/(?:-\/)?(?:issues|merge_requests|epics|wikis)/,
         );
 
         let earliest = -1;
@@ -498,7 +499,7 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
       },
       tokenizer(src) {
         const escaped = src.match(
-          /^\\(\^alert#\d+|[@#!~$%&]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):[^\]]+\])/,
+          /^\\(\^alert#\d+|[@#!~$%&]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):[^\]]+\]|[A-Z]{2,}[A-Z0-9_]*-\d+|(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+>)/,
         );
         if (escaped) {
           return {
@@ -719,6 +720,50 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
               }
             }
 
+            // Task list checkboxes in table cells: | - [ ] Task |
+            if (taskLists && tok.type === 'table') {
+              const table = tok as Tokens.Table;
+              const processCell = (cell: Tokens.TableCell) => {
+                const first = cell.tokens?.[0];
+                if (first?.type === 'text') {
+                  const match = first.text.match(/^[-*]\s+\[([ x~])\][ \t]*/i);
+                  if (match) {
+                    const mark = match[1].toLowerCase();
+                    const checked = mark === 'x' ? ' checked' : '';
+                    const inapp = mark === '~' ? ' data-inapplicable="true"' : '';
+                    const checkboxHtml = `<input type="checkbox" disabled class="task-list-item-checkbox"${checked}${inapp}> `;
+                    const remaining = first.text.slice(match[0].length);
+                    if (!remaining) {
+                      cell.tokens[0] = {
+                        type: 'html',
+                        raw: checkboxHtml,
+                        text: checkboxHtml,
+                        block: false,
+                      } as Token;
+                    } else {
+                      first.text = remaining;
+                      first.raw = first.raw.slice(match[0].length);
+                      cell.tokens.unshift({
+                        type: 'html',
+                        raw: checkboxHtml,
+                        text: checkboxHtml,
+                        block: false,
+                      } as Token);
+                    }
+                  }
+                }
+              };
+
+              for (const cell of table.header) {
+                processCell(cell);
+              }
+              for (const row of table.rows) {
+                for (const cell of row) {
+                  processCell(cell);
+                }
+              }
+            }
+
             // Nested tokens
             if ('tokens' in tok && Array.isArray(tok.tokens)) {
               walk(tok.tokens);
@@ -823,6 +868,11 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
         // Math blocks
         if (math && lang === 'math') {
           return `<div class="gl-math-block" data-math-style="display">${escapeHtml(token.text)}</div>\n`;
+        }
+
+        // GLQL blocks
+        if (glql && lang === 'glql') {
+          return `<div class="glql-wrapper" data-glql><pre class="glql"><code>${escapeHtml(token.text)}</code></pre></div>\n`;
         }
 
         // JSON tables

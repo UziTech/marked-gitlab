@@ -341,11 +341,28 @@ describe('marked-gitlab', () => {
       t.assert.doesNotMatch(html, /task-list-item/);
     });
 
+    test('renders task lists in table headers and rows', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '| - [x] Done | - [~] Inapplicable | - [ ] Normal |\n'
+        + '| --- | --- | --- |\n'
+        + '| - [x] | - [ ] Task with **bold** | Plain cell |\n';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<th><input type="checkbox" disabled class="task-list-item-checkbox" checked> Done<\/th>/);
+      t.assert.match(html, /<th><input type="checkbox" disabled class="task-list-item-checkbox" data-inapplicable="true"> Inapplicable<\/th>/);
+      t.assert.match(html, /<th><input type="checkbox" disabled class="task-list-item-checkbox"> Normal<\/th>/);
+      t.assert.match(html, /<td><input type="checkbox" disabled class="task-list-item-checkbox" checked> <\/td>/);
+      t.assert.match(html, /<td><input type="checkbox" disabled class="task-list-item-checkbox"> Task with <strong>bold<\/strong><\/td>/);
+      t.assert.match(html, /<td>Plain cell<\/td>/);
+    });
+
     test('taskLists can be disabled in options', (t) => {
       const marked = new Marked();
       marked.use(markedGitlab({ taskLists: false }));
-      const html = marked.parse('- [x] Task') as string;
+      const html = marked.parse('- [x] Task\n\n| - [x] Task |\n| --- |\n| 1 |') as string;
       t.assert.match(html, /<input/);
+      t.assert.doesNotMatch(html, /<th><input/);
     });
   });
 
@@ -500,15 +517,28 @@ describe('marked-gitlab', () => {
       t.assert.match(html, /<pre><code>plain\n<\/code><\/pre>/);
     });
 
-    test('diagrams, math, jsonTables can be disabled in options', (t) => {
+    test('renders glql code blocks', (t) => {
       const marked = new Marked();
-      marked.use(markedGitlab({ diagrams: false, math: false, jsonTables: false }));
-      const input = '```mermaid\nA-->B\n```\n\n```math\n1+1\n```\n\n```json:table\n{}\n```';
+      marked.use(markedGitlab());
+      const input = '```glql\nfields: title, state\nassignee = currentUser()\n```';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(
+        html,
+        /<div class="glql-wrapper" data-glql><pre class="glql"><code>fields: title, state\nassignee = currentUser\(\)<\/code><\/pre><\/div>/,
+      );
+    });
+
+    test('diagrams, math, jsonTables, glql can be disabled in options', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ diagrams: false, math: false, jsonTables: false, glql: false }));
+      const input = '```mermaid\nA-->B\n```\n\n```math\n1+1\n```\n\n```json:table\n{}\n```\n\n```glql\nquery\n```';
       const html = marked.parse(input) as string;
 
       t.assert.doesNotMatch(html, /<pre class="mermaid">/);
       t.assert.doesNotMatch(html, /gl-math-block/);
       t.assert.doesNotMatch(html, /gl-json-table/);
+      t.assert.doesNotMatch(html, /glql-wrapper/);
     });
   });
 
@@ -649,13 +679,38 @@ describe('marked-gitlab', () => {
       t.assert.match(html, /class="gfm gfm-commit_range">9ba12248\.\.\.b19a04f5<\/a>/);
     });
 
+    test('parses project references, issue keys, cadence titles, and GitLab URLs', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ project: 'my/proj' }));
+      const input = 'Project gitlab-org/gitlab> and issue key GL-123 and PROJ-456+ and JIRA-789+s.\n'
+        + 'Cadence [cadence:"Sprint Cadence"] and [cadence:plan].\n'
+        + 'Issue comment https://gitlab.com/gitlab-org/gitlab/-/issues/1234#note_101075757 and MR comment https://gitlab.com/gitlab-org/gitlab/-/merge_requests/567#note_999.\n'
+        + 'Epic comment https://gitlab.com/groups/gitlab-org/-/epics/888#note_777.\n'
+        + 'Designs https://gitlab.com/gitlab-org/gitlab/-/issues/1234/designs and design file https://gitlab.com/gitlab-org/gitlab/-/issues/1234/designs/layout.png.\n'
+        + 'Wiki URL https://gitlab.com/gitlab-org/gitlab/-/wikis/Home-page-new-slug.';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab" class="gfm gfm-project">gitlab-org\/gitlab<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/issues\/GL-123" class="gfm gfm-issue">GL-123<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/issues\/PROJ-456" class="gfm gfm-issue" title="Show issue title">PROJ-456\+<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/issues\/JIRA-789" class="gfm gfm-issue" title="Show issue summary">JIRA-789\+s<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/cadences\?title=Sprint%20Cadence" class="gfm gfm-cadence">\[cadence:&quot;Sprint Cadence&quot;\]<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/cadences\?title=plan" class="gfm gfm-cadence">\[cadence:plan\]<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234#note_101075757" class="gfm gfm-issue">#1234 \(comment 101075757\)<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/merge_requests\/567#note_999" class="gfm gfm-merge_request">!567 \(comment 999\)<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/groups\/gitlab-org\/-\/epics\/888#note_777" class="gfm gfm-epic">&amp;888 \(comment 777\)<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234\/designs" class="gfm gfm-issue">#1234 \(designs\)<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234\/designs\/layout\.png" class="gfm gfm-issue">#1234\[layout\.png\]<\/a>\./);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/wikis\/Home-page-new-slug" class="gfm gfm-wiki_page">Home page new slug<\/a>\./);
+    });
+
     test('escaped references are not linked and backslash is removed', (t) => {
       const marked = new Marked();
       marked.use(markedGitlab());
-      const input = '\\#123 and \\@user and \\!456 and \\~bug and \\%v1.0 and \\$789 and \\&999 and \\^alert#1';
+      const input = '\\#123 and \\@user and \\!456 and \\~bug and \\%v1.0 and \\$789 and \\&999 and \\^alert#1 and \\GL-123 and \\gitlab-org/gitlab>';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /#123 and @user and !456 and ~bug and %v1\.0 and \$789 and &amp;999/);
+      t.assert.match(html, /#123 and @user and !456 and ~bug and %v1\.0 and \$789 and &amp;999 and \^alert#1 and GL-123 and gitlab-org\/gitlab(&gt;|>)/);
       t.assert.doesNotMatch(html, /class="gfm /);
     });
 
@@ -670,6 +725,9 @@ describe('marked-gitlab', () => {
     test('parseGitlabReference returns null for non-references', (t) => {
       t.assert.equal(parseGitlabReference('plain text'), null);
       t.assert.equal(parseGitlabReference('\\#123'), null);
+      t.assert.equal(parseGitlabReference('https://gitlab.com/gitlab-org/gitlab/-/issues/1234'), null);
+      t.assert.equal(parseGitlabReference('https://gitlab.com/gitlab-org/gitlab/-/issues'), null);
+      t.assert.equal(parseGitlabReference('https://gitlab.com/gitlab-org/gitlab/-/wikis'), null);
     });
 
     test('parses cross-project references and standalone commit SHAs', (t) => {

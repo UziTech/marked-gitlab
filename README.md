@@ -146,6 +146,16 @@ Rendered HTML:
 <li class="task-list-item"><input type="checkbox" disabled class="task-list-item-checkbox"> Incomplete task</li>
 ```
 
+Task lists are also rendered inside Markdown table cells:
+
+```markdown
+| Status | Task |
+| :--- | :--- |
+| - [x] | Completed task |
+| - [~] | Inapplicable task |
+| - [ ] | Incomplete task |
+```
+
 ### 7. Multimedia & Dimensions
 
 Automatically detects audio and video files, and supports dimension attributes `{width=... height=...}`:
@@ -191,6 +201,15 @@ Automatically detects audio and video files, and supports dimension attributes `
   ```
   ````
 
+- **GitLab Query Language (GLQL)**: Render embedded query views with ```` ```glql ````:
+
+  ````markdown
+  ```glql
+  fields: title, state
+  assignee = currentUser()
+  ```
+  ````
+
 ### 9. Front Matter, Placeholders & Includes
 
 - **Front Matter**: Preserves YAML (`---`), TOML (`+++`), and JSON (`;;;`) metadata in `<pre class="gl-front-matter">`.
@@ -213,20 +232,26 @@ Parses GitLab's rich reference syntax into styled links:
 | Reference | Target | Example |
 | :--- | :--- | :--- |
 | `@user` / `@group` | Users, groups | `@alice` |
+| `namespace/project>` | Projects | `gitlab-org/gitlab>` |
 | `#123` / `group/proj#123` | Issues | `#101`, `my/proj#101` |
+| `GL-123` / `PROJ-456` | Issue tracker keys | `GL-123`, `PROJ-456` |
 | `!123` | Merge requests | `!204` |
 | `$123` | Snippets | `$501` |
 | `&123` | Epics | `&301` |
 | `~label` / `~"label name"` | Labels | `~bug`, `~"feature request"` |
 | `%milestone` / `%"milestone"` | Milestones | `%16.0`, `%"Sprint 1"` |
 | `*iteration:"title"` | Iterations | `*iteration:"Q3"` |
+| `[cadence:1]` / `[cadence:"title"]` | Iteration cadences | `[cadence:1]`, `[cadence:"Sprint"]` |
 | `^alert#123` | Alerts | `^alert#45` |
 | `[work_item:123]` | Bracket references | `[work_item:123]`, `[vulnerability:1]` |
 | `commit@sha` / 40-char SHA | Commits | `other@9ba12248`, `0123456789abcdef...` |
 | `sha...sha` | Commit comparison | `9ba12248...b19a04f5` |
 | `[[Page]]` / `[[Title\|slug]]` | Wiki pages | `[[User Guide\|user-guide]]` |
+| `.../issues/123#note_456` | Comment URLs | Rendered as `#123 (comment 456)` |
+| `.../issues/123/designs` | Design URLs | Rendered as `#123 (designs)`, `#123[pic.png]` |
+| `.../wikis/Page-Slug` | Wiki URLs | Rendered as `Page Slug` |
 
-Prefix references with `\` to prevent linking (e.g. `\#123`).
+Prefix references with `\` to prevent linking (e.g. `\#123`, `\GL-123`, `\gitlab-org/gitlab>`).
 
 ### 11. Footnotes
 
@@ -319,6 +344,9 @@ interface MarkedGitlabOptions {
 
   /** Enable json:table rendering (default: true) */
   jsonTables?: boolean;
+
+  /** Enable glql blocks (default: true) */
+  glql?: boolean;
 
   /** Enable front matter extraction (default: true) */
   frontMatter?: boolean;
