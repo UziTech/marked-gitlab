@@ -1,4 +1,3 @@
-// node:coverage ignore next
 import { Lexer } from 'marked';
 import type { MarkedExtension, Token, Tokens } from 'marked';
 import type { MarkedGitlabOptions } from './types.ts';
