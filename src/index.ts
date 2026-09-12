@@ -20,6 +20,10 @@ interface CustomListItem extends Tokens.ListItem {
   inapplicable?: boolean;
 }
 
+interface CustomTableCell extends Tokens.TableCell {
+  taskTableItem?: boolean;
+}
+
 interface CustomAlert extends Tokens.Generic {
   type: 'alert';
   alertType: string;
@@ -753,36 +757,26 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
               }
             }
 
-            // Task list checkboxes in table cells: | [x] | or | - [ ] Task |
+            // Task list checkboxes in table cells: | [x] | or | [ ] | or | [~] |
             if (taskLists && tok.type === 'table') {
               const table = tok as Tokens.Table;
               const processCell = (cell: Tokens.TableCell) => {
-                const first = cell.tokens?.[0];
-                if (first?.type === 'text') {
-                  const match = first.text.match(/^(?:[-*]\s+\[([ x~])\][ \t]*|^\s*\[([ x~])\]\s*$)/i);
+                if (cell.tokens?.length === 1 && cell.tokens[0]?.type === 'text') {
+                  const match = cell.tokens[0].text.match(/^\s*\[([\s~xX])\]\s*$/);
                   if (match) {
-                    const mark = (match[1] ?? match[2]).toLowerCase();
+                    const mark = match[1].toLowerCase();
                     const checked = mark === 'x' ? ' checked' : '';
                     const inapp = mark === '~' ? ' data-inapplicable="true"' : '';
-                    const remaining = match[2] !== undefined ? '' : first.text.slice(match[0].length);
-                    const checkboxHtml = `<input type="checkbox" disabled class="task-list-item-checkbox"${checked}${inapp}>${remaining ? ' ' : ''}`;
-                    if (!remaining) {
-                      cell.tokens[0] = {
+                    const checkboxHtml = `<input type="checkbox" disabled class="task-list-item-checkbox"${checked}${inapp}> `;
+                    (cell as CustomTableCell).taskTableItem = true;
+                    cell.tokens = [
+                      {
                         type: 'html',
                         raw: checkboxHtml,
                         text: checkboxHtml,
                         block: false,
-                      } as Token;
-                    } else {
-                      first.text = remaining;
-                      first.raw = first.raw.slice(match[0].length);
-                      cell.tokens.unshift({
-                        type: 'html',
-                        raw: checkboxHtml,
-                        text: checkboxHtml,
-                        block: false,
-                      } as Token);
-                    }
+                      } as Token,
+                    ];
                   }
                 }
               };
@@ -890,6 +884,18 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
         }
         if (item.task) {
           return `<li class="task-list-item">${this.parser.parse(item.tokens)}</li>\n`;
+        }
+        return false;
+      },
+
+      tablecell(cell: Tokens.TableCell) {
+        if (!taskLists) {
+          return false;
+        }
+        if ((cell as CustomTableCell).taskTableItem) {
+          const tag = cell.header ? 'th' : 'td';
+          const align = cell.align ? ` align="${cell.align}"` : '';
+          return `<${tag}${align} class="task-table-item">${this.parser.parseInline(cell.tokens)}</${tag}>\n`;
         }
         return false;
       },

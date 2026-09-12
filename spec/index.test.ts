@@ -341,20 +341,38 @@ describe('marked-gitlab', () => {
       t.assert.doesNotMatch(html, /task-list-item/);
     });
 
-    test('renders task lists in table headers and rows', (t) => {
+    test('renders native GLFM task lists in table cells with task-table-item class', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '| [x] | [~] | [ ] |\n'
+        + '| :---: | --- | ---: |\n'
+        + '| [x] | [ ] | Plain cell |\n'
+        + '| [~] | Inapplicable row | [ ] |\n';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<th align="center" class="task-table-item"><input type="checkbox" disabled class="task-list-item-checkbox" checked> <\/th>/);
+      t.assert.match(html, /<th class="task-table-item"><input type="checkbox" disabled class="task-list-item-checkbox" data-inapplicable="true"> <\/th>/);
+      t.assert.match(html, /<th align="right" class="task-table-item"><input type="checkbox" disabled class="task-list-item-checkbox"> <\/th>/);
+      t.assert.match(html, /<td align="center" class="task-table-item"><input type="checkbox" disabled class="task-list-item-checkbox" checked> <\/td>/);
+      t.assert.match(html, /<td class="task-table-item"><input type="checkbox" disabled class="task-list-item-checkbox"> <\/td>/);
+      t.assert.match(html, /<td align="right">Plain cell<\/td>/);
+      t.assert.match(html, /<td align="center" class="task-table-item"><input type="checkbox" disabled class="task-list-item-checkbox" data-inapplicable="true"> <\/td>/);
+      t.assert.match(html, /<td>Inapplicable row<\/td>/);
+    });
+
+    test('does not parse table cells with dashes or extra text as task items', (t) => {
       const marked = new Marked();
       marked.use(markedGitlab());
       const input = '| - [x] Done | - [~] Inapplicable | - [ ] Normal |\n'
         + '| --- | --- | --- |\n'
-        + '| - [x] | - [ ] Task with **bold** | Plain cell |\n';
+        + '| - [x] | [ ] Task with text | Plain cell |\n';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<th><input type="checkbox" disabled class="task-list-item-checkbox" checked> Done<\/th>/);
-      t.assert.match(html, /<th><input type="checkbox" disabled class="task-list-item-checkbox" data-inapplicable="true"> Inapplicable<\/th>/);
-      t.assert.match(html, /<th><input type="checkbox" disabled class="task-list-item-checkbox"> Normal<\/th>/);
-      t.assert.match(html, /<td><input type="checkbox" disabled class="task-list-item-checkbox" checked><\/td>/);
-      t.assert.match(html, /<td><input type="checkbox" disabled class="task-list-item-checkbox"> Task with <strong>bold<\/strong><\/td>/);
-      t.assert.match(html, /<td>Plain cell<\/td>/);
+      t.assert.doesNotMatch(html, /task-table-item/);
+      t.assert.doesNotMatch(html, /<input/);
+      t.assert.match(html, /<th>- \[x\] Done<\/th>/);
+      t.assert.match(html, /<td>- \[x\]<\/td>/);
+      t.assert.match(html, /<td>\[ \] Task with text<\/td>/);
     });
 
     test('renders native GLFM table cell task lists without list markers', (t) => {
@@ -367,16 +385,17 @@ describe('marked-gitlab', () => {
         + '|   [~]   | Inapplicable task |\n';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<td><input type="checkbox" disabled class="task-list-item-checkbox" checked><\/td>\s*<td>Refactor the backend<\/td>/);
-      t.assert.match(html, /<td><input type="checkbox" disabled class="task-list-item-checkbox"><\/td>\s*<td>Refactor the frontend<\/td>/);
-      t.assert.match(html, /<td><input type="checkbox" disabled class="task-list-item-checkbox" data-inapplicable="true"><\/td>\s*<td>Inapplicable task<\/td>/);
+      t.assert.match(html, /<td class="task-table-item"><input type="checkbox" disabled class="task-list-item-checkbox" checked> <\/td>\s*<td>Refactor the backend<\/td>/);
+      t.assert.match(html, /<td class="task-table-item"><input type="checkbox" disabled class="task-list-item-checkbox"> <\/td>\s*<td>Refactor the frontend<\/td>/);
+      t.assert.match(html, /<td class="task-table-item"><input type="checkbox" disabled class="task-list-item-checkbox" data-inapplicable="true"> <\/td>\s*<td>Inapplicable task<\/td>/);
     });
 
     test('taskLists can be disabled in options', (t) => {
       const marked = new Marked();
       marked.use(markedGitlab({ taskLists: false }));
-      const html = marked.parse('- [x] Task\n\n| - [x] Task |\n| --- |\n| 1 |') as string;
+      const html = marked.parse('- [x] Task\n\n| [x] |\n| --- |\n| 1 |') as string;
       t.assert.match(html, /<input/);
+      t.assert.doesNotMatch(html, /task-table-item/);
       t.assert.doesNotMatch(html, /<th><input/);
     });
   });
