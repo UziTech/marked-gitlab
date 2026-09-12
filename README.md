@@ -132,7 +132,7 @@ Heading anchors follow GitLab's slugification rules (Unicode letter/digit preser
 <h1 id="chapter-1">Chapter 1<a href="#chapter-1" aria-label="Link to heading 'Chapter 1'" data-heading-content="Chapter 1" class="anchor"></a></h1>
 ```
 
-### 6. Task Lists & Inapplicable Items (`[~]`)
+### 6. Task Lists, Inapplicable Items (`[~]`) & Task Tables
 
 In addition to `- [x]` (completed) and `- [ ]` (incomplete), GitLab supports `- [~]` (inapplicable):
 
@@ -150,16 +150,46 @@ Rendered HTML:
 <li class="task-list-item"><input type="checkbox" disabled class="task-list-item-checkbox"> Incomplete task</li>
 ```
 
-Task lists are also rendered inside Markdown table cells, either directly with `[x]` / `[ ]` / `[~]` or with list markers `- [x]`:
+#### Task Tables
+
+GitLab supports native task items in Markdown table cells. Per the GLFM specification, the checkbox must be the sole content of the cell (without list markers such as `-` or `*`):
 
 ```markdown
-| Status | Task |
-| :--- | :--- |
-| [x] | Native table checkbox |
-| [~] | Inapplicable table checkbox |
-| [ ] | Incomplete table checkbox |
-| - [x] | Also supports list marker |
+| Complete | Task |
+| :---: | :--- |
+| [x] | Refactor the backend |
+| [ ] | Refactor the frontend |
+| [~] | Inapplicable task |
 ```
+
+Rendered HTML applies the `task-table-item` CSS class to the enclosing `<td>` / `<th>` while preserving cell alignment:
+
+```html
+<table>
+<thead>
+<tr>
+<th align="center">Complete</th>
+<th align="left">Task</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="center" class="task-table-item"><input type="checkbox" disabled class="task-list-item-checkbox" checked> </td>
+<td align="left">Refactor the backend</td>
+</tr>
+<tr>
+<td align="center" class="task-table-item"><input type="checkbox" disabled class="task-list-item-checkbox"> </td>
+<td align="left">Refactor the frontend</td>
+</tr>
+<tr>
+<td align="center" class="task-table-item"><input type="checkbox" disabled class="task-list-item-checkbox" data-inapplicable="true"> </td>
+<td align="left">Inapplicable task</td>
+</tr>
+</tbody>
+</table>
+```
+
+> **Note:** To add multiple task items in a single cell or task items with additional text, use an HTML `<table>` with Markdown list items inside `<td>`.
 
 ### 7. Multimedia & Dimensions
 
