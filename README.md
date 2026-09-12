@@ -68,7 +68,7 @@ Recognizes color codes inside backticks (HEX, RGB, HSL) and renders visual color
 Rendered HTML:
 
 ```html
-<code><span class="gl-color-chip" style="background-color: #FF0000;"></span>#FF0000</code>
+<code>#FF0000<span class="gfm-color_chip"><span style="background-color: #FF0000;"></span></span></code>
 ```
 
 To display a color code without the preview chip, escape it with a backslash: `\`#FF0000\``.
@@ -110,8 +110,8 @@ Highlight added or deleted text using curly brace or square bracket notation:
 Rendered HTML:
 
 ```html
-<ins class="diff addition">added text</ins>
-<del class="diff deletion">deleted text</del>
+<span class="idiff left right addition">added text</span>
+<span class="idiff left right deletion">deleted text</span>
 ```
 
 ### 5. Table of Contents (`[[_TOC_]]` / `[TOC]`) & Heading Anchors
@@ -126,9 +126,13 @@ Insert a table of contents automatically generated from document headings:
 # Chapter 2
 ```
 
-Heading anchors follow GitLab's slugification rules (Unicode letter/digit preservation, space-to-hyphen conversion, punctuation removal, and duplicate deduplication `-1`, `-2`).
+Heading anchors follow GitLab's slugification rules (Unicode letter/digit preservation, space-to-hyphen conversion, punctuation removal, and duplicate deduplication `-1`, `-2`). Each heading includes a GLFM-compatible anchor element:
 
-### 6. Task Lists & Inapplicable Items (`[~]`)
+```html
+<h1 id="chapter-1">Chapter 1<a href="#chapter-1" aria-label="Link to heading 'Chapter 1'" data-heading-content="Chapter 1" class="anchor"></a></h1>
+```
+
+### 6. Task Lists, Inapplicable Items (`[~]`) & Task Tables
 
 In addition to `- [x]` (completed) and `- [ ]` (incomplete), GitLab supports `- [~]` (inapplicable):
 
@@ -146,14 +150,61 @@ Rendered HTML:
 <li class="task-list-item"><input type="checkbox" disabled class="task-list-item-checkbox"> Incomplete task</li>
 ```
 
+#### Task Tables
+
+GitLab supports native task items in Markdown table cells. Per the GLFM specification, the checkbox must be the sole content of the cell (without list markers such as `-` or `*`):
+
+```markdown
+| Complete | Task |
+| :---: | :--- |
+| [x] | Refactor the backend |
+| [ ] | Refactor the frontend |
+| [~] | Inapplicable task |
+```
+
+Rendered HTML applies the `task-table-item` CSS class to the enclosing `<td>` / `<th>` while preserving cell alignment:
+
+```html
+<table>
+<thead>
+<tr>
+<th align="center">Complete</th>
+<th align="left">Task</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="center" class="task-table-item"><input type="checkbox" disabled class="task-list-item-checkbox" checked> </td>
+<td align="left">Refactor the backend</td>
+</tr>
+<tr>
+<td align="center" class="task-table-item"><input type="checkbox" disabled class="task-list-item-checkbox"> </td>
+<td align="left">Refactor the frontend</td>
+</tr>
+<tr>
+<td align="center" class="task-table-item"><input type="checkbox" disabled class="task-list-item-checkbox" data-inapplicable="true"> </td>
+<td align="left">Inapplicable task</td>
+</tr>
+</tbody>
+</table>
+```
+
+> **Note:** To add multiple task items in a single cell or task items with additional text, use an HTML `<table>` with Markdown list items inside `<td>`.
+
 ### 7. Multimedia & Dimensions
 
-Automatically detects audio and video files, and supports dimension attributes `{width=... height=...}`:
+Automatically detects audio and video files, wraps them in media containers, and supports dimension attributes `{width=... height=...}`:
 
 ```markdown
 ![Video](media/demo.mp4)
 ![Audio](media/podcast.mp3)
 ![Logo](img/logo.png){width=100 height=50px}
+```
+
+Rendered HTML:
+
+```html
+<span class="media-container video-container"><video src="media/demo.mp4" controls preload="metadata" class="gl-rounded-lg" data-setup="{}" data-title="Video"><a href="media/demo.mp4">Video</a></video></span>
 ```
 
 ### 8. Diagrams, Math & JSON Tables
@@ -167,10 +218,22 @@ Automatically detects audio and video files, and supports dimension attributes `
   ```
   ````
 
-- **Math Equations**: Display blocks using ```` ```math ```` and inline expressions with `$`:
+- **Math Equations**: Display blocks using ```` ```math ````, multiline `$$...$$` blocks, or `\[...\]`, and inline expressions with `$`, `$`...`$`, `$$...$$`, or `\(...\)`:
 
   ```markdown
   $`a^2 + b^2 = c^2`$
+  \(E = mc^2\)
+  $$a + b$$
+  ```
+
+  Display math blocks:
+
+  ```markdown
+  $$
+  a^2 + b^2 = c^2
+  $$
+
+  \[x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}\]
   ```
 
 - **JSON Tables**: Render tables directly from JSON data using ```` ```json:table ````:
@@ -181,6 +244,15 @@ Automatically detects audio and video files, and supports dimension attributes `
     "fields": [{"key": "name", "label": "Name", "sortable": true}, "role"],
     "items": [{"name": "Alice", "role": "Engineer"}]
   }
+  ```
+  ````
+
+- **GitLab Query Language (GLQL)**: Render embedded query views with ```` ```glql ````:
+
+  ````markdown
+  ```glql
+  fields: title, state
+  assignee = currentUser()
   ```
   ````
 
@@ -206,24 +278,66 @@ Parses GitLab's rich reference syntax into styled links:
 | Reference | Target | Example |
 | :--- | :--- | :--- |
 | `@user` / `@group` | Users, groups | `@alice` |
+| `namespace/project>` | Projects | `gitlab-org/gitlab>` |
 | `#123` / `group/proj#123` | Issues | `#101`, `my/proj#101` |
+| `GL-123` / `PROJ-456` | Issue tracker keys | `GL-123`, `PROJ-456` |
 | `!123` | Merge requests | `!204` |
 | `$123` | Snippets | `$501` |
 | `&123` | Epics | `&301` |
-| `~label` / `~"label name"` | Labels | `~bug`, `~"feature request"` |
-| `%milestone` / `%"milestone"` | Milestones | `%16.0`, `%"Sprint 1"` |
+| `~label` / `proj~label` / `/proj~label` | Labels | `~bug`, `/my/proj~"feature request"` |
+| `%milestone` / `/proj%milestone` | Milestones | `%16.0`, `/my/proj%"Sprint 1"` |
 | `*iteration:"title"` | Iterations | `*iteration:"Q3"` |
+| `[cadence:1]` / `[cadence:"title"]` | Iteration cadences | `[cadence:1]`, `[cadence:"Sprint"]` |
 | `^alert#123` | Alerts | `^alert#45` |
 | `[work_item:123]` | Bracket references | `[work_item:123]`, `[vulnerability:1]` |
+| `[wiki_page:proj:Page#sec]` | Cross-project wikis | `[wiki_page:gitlab-org/gitlab:Home]` |
 | `commit@sha` / 40-char SHA | Commits | `other@9ba12248`, `0123456789abcdef...` |
 | `sha...sha` | Commit comparison | `9ba12248...b19a04f5` |
-| `[[Page]]` / `[[Title\|slug]]` | Wiki pages | `[[User Guide\|user-guide]]` |
+| `[[Page#anchor]]` / `[[Title\|slug#anchor]]` | Wiki pages & anchors | `[[Wiki#setup]]`, `[[User Guide\|user-guide#setup]]` |
+| `.../issues/123` / `.../merge_requests/567` | Base entity URLs | Auto-linked to `#123`, `!567`, `&888` (supports `+` / `+s`) |
+| `.../issues/123#note_456` | Comment URLs | Rendered as `#123 (comment 456)` |
+| `.../issues/123/designs` | Design URLs | Rendered as `#123 (designs)`, `#123[pic.png]` |
+| `.../wikis/Page-Slug` | Wiki URLs | Rendered as `Page Slug` |
 
-Prefix references with `\` to prevent linking (e.g. `\#123`).
+Prefix references with `\` to prevent linking (e.g. `\#123`, `\GL-123`, `\gitlab-org/gitlab>`).
 
-### 11. Emojis
+Rendered reference links include GLFM-standard attributes `data-reference-type`, `data-original`, and `data-link`:
 
-Converts standard emoji shortcodes into `<gl-emoji>` tags:
+```html
+<a href="https://gitlab.com/gitlab-org/gitlab/-/issues/101" class="gfm gfm-issue" data-reference-type="issue" data-original="#101" data-link="false">#101</a>
+```
+
+### 11. Footnotes
+
+Add footnotes to your content with inline references and definitions. Footnotes are automatically renumbered sequentially (`1`, `2`, `3`...) by appearance order in the document, regardless of whether identifiers are numbers or names:
+
+```markdown
+Something that needs more explanation.[^1]
+
+Another claim.[^note]
+
+[^1]: This is the footnote content.
+[^note]: A named footnote with **formatting**.
+```
+
+Rendered HTML:
+
+```html
+<sup class="footnote-ref"><a href="#fn-1" id="fnref-1" data-footnote-ref>1</a></sup>
+...
+<sup class="footnote-ref"><a href="#fn-note" id="fnref-note" data-footnote-ref>2</a></sup>
+...
+<section class="footnotes" data-footnotes>
+<ol>
+<li id="fn-1"><p>This is the footnote content. <a href="#fnref-1" class="footnote-backref" data-footnote-backref aria-label="Back to reference 1">↩</a></p></li>
+<li id="fn-note"><p>A named footnote with <strong>formatting</strong>. <a href="#fnref-note" class="footnote-backref" data-footnote-backref aria-label="Back to reference 2">↩</a></p></li>
+</ol>
+</section>
+```
+
+### 12. Emojis
+
+Converts standard emoji shortcodes from the full [Gemoji](https://github.com/github/gemoji) dataset (~1900 emojis) into `<gl-emoji>` tags:
 
 ```markdown
 :thumbsup: :heart: :rocket:
@@ -232,7 +346,7 @@ Converts standard emoji shortcodes into `<gl-emoji>` tags:
 Rendered HTML:
 
 ```html
-<gl-emoji title="thumbs up" data-name="thumbsup" data-unicode-version="6.0">👍</gl-emoji>
+<gl-emoji data-name="thumbsup" data-unicode-version="6.0" title="thumbs up">👍</gl-emoji>
 ```
 
 ---
@@ -288,14 +402,20 @@ interface MarkedGitlabOptions {
   /** Enable json:table rendering (default: true) */
   jsonTables?: boolean;
 
+  /** Enable glql blocks (default: true) */
+  glql?: boolean;
+
   /** Enable front matter extraction (default: true) */
   frontMatter?: boolean;
+
+  /** Enable footnotes [^1] (default: true) */
+  footnotes?: boolean;
 
   /** Map of placeholder keys to replacement values (e.g. { KEY: 'val' }) */
   placeholders?: Record<string, string>;
 
-  /** Enable emoji shortcodes or provide a custom emoji map (default: true) */
-  emojis?: boolean | Record<string, { emoji: string; title: string }>;
+  /** Enable emoji shortcodes or provide a custom emoji override map (default: true) */
+  emojis?: boolean | Record<string, string>;
 
   /** Handler for ::include{file=...} directives */
   includeHandler?: (file: string) => string | undefined;
@@ -316,6 +436,7 @@ import {
   parseGitlabReference,
   renderEmoji,
   DEFAULT_EMOJIS,
+  EMOJI_DATA,
 } from 'marked-gitlab';
 ```
 

@@ -5,6 +5,7 @@ export interface ReferenceMatch {
   text: string;
   className: string;
   title?: string;
+  isUrl: boolean;
 }
 
 export function parseGitlabReference(
@@ -12,8 +13,12 @@ export function parseGitlabReference(
   baseUrl = 'https://gitlab.com',
   defaultProject = '',
 ): ReferenceMatch | null {
-  // Escaped references: e.g. \#123, \@user, \!123, \~label, \%milestone, \&123, \$123, \^alert#123
-  if (/^\\([@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):)/i.test(src)) {
+  // Escaped references: e.g. \#123, \@user, \!123, \~label, \%milestone, \&123, \$123, \^alert#123, \GL-123, \group/project>
+  if (
+    /^\\([@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):|[A-Z]{2,}[A-Z0-9_]*-\d+|\/?(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+[>~%]|(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+>)/i.test(
+      src,
+    )
+  ) {
     return null;
   }
 
@@ -32,7 +37,22 @@ export function parseGitlabReference(
     if (kind === 'contact') {
       href = `mailto:${target}`;
     } else if (kind === 'wiki_page') {
-      href = `${projectBase}/-/wikis/${target}`;
+      const [rawTarget, ...hashParts] = target.split('#');
+      const hash = hashParts.length > 0 ? `#${hashParts.join('#')}` : '';
+      const colonIdx = rawTarget.lastIndexOf(':');
+      if (colonIdx !== -1) {
+        const proj = rawTarget.slice(0, colonIdx);
+        const pageSlug = rawTarget.slice(colonIdx + 1);
+        href = `${cleanBaseUrl}/${proj}/-/wikis/${encodeURIComponent(pageSlug)}${hash}`;
+      } else {
+        href = `${projectBase}/-/wikis/${encodeURIComponent(rawTarget)}${hash}`;
+      }
+    } else if (kind === 'cadence') {
+      const cleanTarget = target.replace(/^"(.*)"$/, '$1');
+      const isId = /^\d+$/.test(cleanTarget);
+      href = isId
+        ? `${projectBase}/-/cadences/${cleanTarget}`
+        : `${projectBase}/-/cadences?title=${encodeURIComponent(cleanTarget)}`;
     } else {
       const parts = target.split('/');
       const id = parts.pop()!;
@@ -41,7 +61,6 @@ export function parseGitlabReference(
         issue: 'issues',
         work_item: 'work_items',
         epic: 'epics',
-        cadence: 'cadences',
         vulnerability: 'security/vulnerabilities',
         feature_flag: 'feature_flags',
       };
@@ -53,20 +72,133 @@ export function parseGitlabReference(
       href,
       text: bracketMatch[0],
       className,
+      isUrl: false,
     };
+  }
+
+  // Project reference shorthand: namespace/project>
+  const projectMatch = src.match(/^((?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+)>/);
+  if (projectMatch) {
+    const target = projectMatch[1];
+    return {
+      raw: projectMatch[0],
+      type: 'project',
+      href: `${cleanBaseUrl}/${target}`,
+      text: target,
+      className: 'gfm gfm-project',
+      isUrl: false,
+    };
+  }
+
+  // Issue tracker key: GL-123 or PROJ-456
+  const issueKeyMatch = src.match(/^([A-Z]{2,}[A-Z0-9_]*-\d+)(\+s|\+)?/);
+  if (issueKeyMatch) {
+    const key = issueKeyMatch[1];
+    const suffix = issueKeyMatch[2];
+    return {
+      raw: issueKeyMatch[0],
+      type: 'issue',
+      href: `${projectBase}/-/issues/${key}`,
+      text: issueKeyMatch[0],
+      className: 'gfm gfm-issue',
+      title: suffix ? `Show issue ${suffix === '+s' ? 'summary' : 'title'}` : undefined,
+      isUrl: false,
+    };
+  }
+
+  // GitLab URL references (comments, designs, wikis, issues, merge requests, epics)
+  const gitlabUrlMatch = src.match(
+    /^https?:\/\/[^\s/]+(?:\/groups)?\/((?:(?!-\/)[a-zA-Z0-9_\-.]+\/)*(?!-\/)[a-zA-Z0-9_\-.]+)\/(?:-\/)?(issues|merge_requests|epics|wikis)(?:\/([^\s#?]+))?(?:#note_(\d+))?/,
+  );
+  if (gitlabUrlMatch) {
+    let rawUrl = gitlabUrlMatch[0];
+    const punctMatch = rawUrl.match(/[.,;)]+$/);
+    if (punctMatch) {
+      rawUrl = rawUrl.slice(0, -punctMatch[0].length);
+    }
+    const [, projPath, resource, sub, noteId] = gitlabUrlMatch;
+    let cleanSub = sub;
+    if (punctMatch && cleanSub) {
+      cleanSub = cleanSub.replace(/[.,;)]+$/, '');
+    }
+    let text = '';
+    let type = '';
+    let className = '';
+    let title: string | undefined;
+
+    if (resource === 'wikis' && cleanSub) {
+      type = 'wiki_page';
+      className = 'gfm gfm-wiki_page';
+      text = decodeURIComponent(cleanSub).replace(/-/g, ' ');
+    } else if (noteId && cleanSub) {
+      const id = cleanSub.split('/')[0];
+      const sigil = resource === 'merge_requests' ? '!' : resource === 'epics' ? '&' : '#';
+      type = resource === 'merge_requests' ? 'merge_request' : resource === 'epics' ? 'epic' : 'issue';
+      className = `gfm gfm-${type}`;
+      text = `${sigil}${id} (comment ${noteId})`;
+    } else if (resource === 'issues' || resource === 'merge_requests' || resource === 'epics') {
+      const sigil = resource === 'merge_requests' ? '!' : resource === 'epics' ? '&' : '#';
+      const kind = resource === 'merge_requests' ? 'merge_request' : resource === 'epics' ? 'epic' : 'issue';
+      type = kind;
+      className = `gfm gfm-${kind}`;
+
+      if (resource === 'issues' && cleanSub?.includes('designs')) {
+        const subParts = cleanSub.split('/');
+        const id = subParts[0];
+        if (subParts[1] === 'designs') {
+          if (subParts[2]) {
+            text = `#${id}[${decodeURIComponent(subParts[2])}]`;
+          } else {
+            text = `#${id} (designs)`;
+          }
+        }
+      } else if (cleanSub) {
+        const idMatch = cleanSub.match(/^(\d+)(\+s|\+)?$/);
+        if (idMatch) {
+          const id = idMatch[1];
+          const suffix = idMatch[2] || '';
+          const isSameProject = Boolean(
+            cleanProject
+              && (projPath === cleanProject
+                || cleanProject.startsWith(`${projPath}/`)
+                || projPath.startsWith(`${cleanProject}/`)),
+          );
+          const prefix = isSameProject ? '' : projPath;
+          text = `${prefix}${sigil}${id}${suffix}`;
+          if (suffix) {
+            title = `Show ${kind.replace('_', ' ')} ${suffix === '+s' ? 'summary' : 'title'}`;
+          }
+        }
+      }
+    }
+
+    if (text) {
+      return {
+        raw: rawUrl,
+        type,
+        href: rawUrl,
+        text,
+        className,
+        title,
+        isUrl: true,
+      };
+    }
   }
 
   // Wiki page: [[Page]] or [[Title|slug]]
   const wikiMatch = src.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/);
   if (wikiMatch) {
     const title = wikiMatch[1];
-    const slug = wikiMatch[2] ?? title;
+    const target = wikiMatch[2] ?? title;
+    const [slug, ...hashParts] = target.split('#');
+    const hash = hashParts.length > 0 ? `#${hashParts.join('#')}` : '';
     return {
       raw: wikiMatch[0],
       type: 'wiki_page',
-      href: `${projectBase}/-/wikis/${encodeURIComponent(slug)}`,
+      href: `${projectBase}/-/wikis/${encodeURIComponent(slug)}${hash}`,
       text: title,
       className: 'gfm gfm-wiki_page',
+      isUrl: false,
     };
   }
 
@@ -80,6 +212,7 @@ export function parseGitlabReference(
       text: iterationMatch[0],
       className: 'gfm gfm-iteration',
       title: iterationMatch[1],
+      isUrl: false,
     };
   }
 
@@ -93,6 +226,7 @@ export function parseGitlabReference(
       href: `${proj}/-/alert_management/${alertRefMatch[2]}`,
       text: alertRefMatch[0],
       className: 'gfm gfm-alert',
+      isUrl: false,
     };
   }
 
@@ -106,6 +240,7 @@ export function parseGitlabReference(
       href: `${proj}/-/compare/${commitRangeMatch[2]}...${commitRangeMatch[3]}`,
       text: commitRangeMatch[0],
       className: 'gfm gfm-commit_range',
+      isUrl: false,
     };
   }
 
@@ -119,6 +254,7 @@ export function parseGitlabReference(
       href: `${proj}/-/commit/${commitMatch[2]}`,
       text: commitMatch[0],
       className: 'gfm gfm-commit',
+      isUrl: false,
     };
   }
 
@@ -132,6 +268,7 @@ export function parseGitlabReference(
       href: `${cleanBaseUrl}/${target}`,
       text: mentionMatch[0],
       className: 'gfm gfm-project_member',
+      isUrl: false,
     };
   }
 
@@ -154,30 +291,34 @@ export function parseGitlabReference(
       text: itemMatch[0],
       className: `gfm gfm-${info.kind}`,
       title: suffix ? `Show ${info.kind} ${suffix === '+s' ? 'summary' : 'title'}` : undefined,
+      isUrl: false,
     };
   }
 
-  // Label: ~123, ~bug, ~"feature request", ~"scoped::label", proj~label
-  const labelMatch = src.match(/^((?:[a-zA-Z0-9_\-.]+\/)?[a-zA-Z0-9_\-.]+)?~("([^"]+)"|[a-zA-Z0-9_\-.:]+)/);
+  // Label: ~123, ~bug, ~"feature request", ~"scoped::label", proj~label, /proj~label
+  const labelMatch = src.match(/^(\/?[a-zA-Z0-9_\-.]+(?:\/[a-zA-Z0-9_\-.]+)*)?~("([^"]+)"|[a-zA-Z0-9_\-.:]+)/);
   if (labelMatch) {
     const [, projPrefix, , labelName] = labelMatch;
     const name = labelName ?? labelMatch[2];
-    const proj = projPrefix ? `${cleanBaseUrl}/${projPrefix}` : projectBase;
+    const cleanPrefix = projPrefix ? projPrefix.replace(/^\/+|\/+$/g, '') : '';
+    const proj = cleanPrefix ? `${cleanBaseUrl}/${cleanPrefix}` : projectBase;
     return {
       raw: labelMatch[0],
       type: 'label',
       href: `${proj}/-/issues?label_name=${encodeURIComponent(name)}`,
       text: labelMatch[0],
       className: 'gfm gfm-label',
+      isUrl: false,
     };
   }
 
-  // Milestone: %123, %v1.23, %"milestone name", proj%123
-  const milestoneMatch = src.match(/^((?:[a-zA-Z0-9_\-.]+\/)?[a-zA-Z0-9_\-.]+)?%("([^"]+)"|[a-zA-Z0-9_\-]+(?:\.[a-zA-Z0-9_\-]+)*)/);
+  // Milestone: %123, %v1.23, %"milestone name", proj%123, /proj%123
+  const milestoneMatch = src.match(/^(\/?[a-zA-Z0-9_\-.]+(?:\/[a-zA-Z0-9_\-.]+)*)?%("([^"]+)"|[a-zA-Z0-9_\-]+(?:\.[a-zA-Z0-9_\-]+)*)/);
   if (milestoneMatch) {
     const [, projPrefix, , msName] = milestoneMatch;
     const name = msName ?? milestoneMatch[2];
-    const proj = projPrefix ? `${cleanBaseUrl}/${projPrefix}` : projectBase;
+    const cleanPrefix = projPrefix ? projPrefix.replace(/^\/+|\/+$/g, '') : '';
+    const proj = cleanPrefix ? `${cleanBaseUrl}/${cleanPrefix}` : projectBase;
     return {
       raw: milestoneMatch[0],
       type: 'milestone',
@@ -185,6 +326,7 @@ export function parseGitlabReference(
       text: milestoneMatch[0],
       className: 'gfm gfm-milestone',
       title: name,
+      isUrl: false,
     };
   }
 

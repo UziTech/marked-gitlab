@@ -27,6 +27,7 @@ const options: MarkedGitlabOptions = {
   math: true,
   jsonTables: true,
   frontMatter: true,
+  footnotes: true,
   placeholders: {
     project_name: 'marked-gitlab',
   },

@@ -5,10 +5,12 @@ import type { MarkedGitlabOptions } from './types.ts';
 import { generateGitlabSlug } from './slug.ts';
 import { renderColorCode, isColorCode } from './colors.ts';
 import { parseGitlabReference } from './references.ts';
-import { renderEmoji, DEFAULT_EMOJIS } from './emojis.ts';
+import { renderEmoji, DEFAULT_EMOJIS, EMOJI_DATA } from './emojis.ts';
+import type { EmojiEntry } from './emojis.ts';
 
 export type { MarkedGitlabOptions };
-export { generateGitlabSlug, renderColorCode, isColorCode, parseGitlabReference, renderEmoji, DEFAULT_EMOJIS };
+export { generateGitlabSlug, renderColorCode, isColorCode, parseGitlabReference, renderEmoji, DEFAULT_EMOJIS, EMOJI_DATA };
+export type { EmojiEntry };
 
 interface CustomHeading extends Tokens.Heading {
   anchor?: string;
@@ -16,6 +18,10 @@ interface CustomHeading extends Tokens.Heading {
 
 interface CustomListItem extends Tokens.ListItem {
   inapplicable?: boolean;
+}
+
+interface CustomTableCell extends Tokens.TableCell {
+  taskTableItem?: boolean;
 }
 
 interface CustomAlert extends Tokens.Generic {
@@ -89,7 +95,7 @@ function renderToc(headings: Array<{ depth: number; text: string; slug: string }
   return html;
 }
 
-const VIDEO_EXTENSIONS = new Set(['.mp4', '.m4v', '.mov', '.webm', '.ogv']);
+const VIDEO_EXTENSIONS = new Set(['.mp4', '.m4v', '.mov', '.webm', '.ogv', '.3gp']);
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.oga', '.ogg', '.spx', '.wav']);
 const ALERT_TYPES = new Set(['note', 'tip', 'important', 'caution', 'warning']);
 
@@ -110,13 +116,16 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
     diagrams = true,
     math = true,
     jsonTables = true,
+    glql = true,
     frontMatter = true,
+    footnotes = true,
     placeholders = {},
     emojis = true,
     includeHandler,
   } = options;
 
   let currentHeadings: Array<{ depth: number; text: string; slug: string }> = [];
+  let footnoteDefinitions: Map<string, { tokens: Token[] }> = new Map();
 
   const extensions: NonNullable<MarkedExtension['extensions']> = [];
 
@@ -296,8 +305,7 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
         }
       },
       renderer(token: Tokens.Generic) {
-        const tag = token.diffType === 'addition' ? 'ins' : 'del';
-        return `<${tag} class="diff ${token.diffType}">${this.parser.parseInline(token.tokens!)}</${tag}>`;
+        return `<span class="idiff left right ${token.diffType}">${this.parser.parseInline(token.tokens!)}</span>`;
       },
     });
   }
@@ -332,21 +340,55 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
       name: 'inlineMath',
       level: 'inline',
       start(src) {
-        return src.indexOf('$');
+        const dollar = src.indexOf('$');
+        const backslash = src.indexOf('\\(');
+        if (dollar === -1) return backslash === -1 ? undefined : backslash;
+        if (backslash === -1) return dollar;
+        return Math.min(dollar, backslash);
       },
       tokenizer(src) {
-        const match = src.match(/^(?:\$`([^`]+)`\$|\$\$([^$]+)\$\$|\$([^$\r\n]+)\$)/);
+        // $`...`$, $$...$$, $...$, \(...\)
+        const match = src.match(/^(?:\$`([^`]+)`\$|\$\$([^$]+)\$\$|\$([^$\r\n]+)\$|\\\(([\s\S]*?)\\\))/);
         if (match) {
-          const mathExpr = match[1] ?? match[2] ?? match[3];
+          const isDisplay = match[2] !== undefined;
+          const mathExpr = match[1] ?? match[2] ?? match[3] ?? match[4];
           return {
             type: 'inlineMath',
+            raw: match[0],
+            math: mathExpr,
+            display: isDisplay,
+          };
+        }
+      },
+      renderer(token: Tokens.Generic) {
+        const style = token.display ? 'display' : 'inline';
+        return `<span class="gl-math-inline" data-math-style="${style}">${escapeHtml(token.math)}</span>`;
+      },
+    });
+
+    // Display math: \[...\] or $$...$$
+    extensions.push({
+      name: 'displayMath',
+      level: 'block',
+      start(src) {
+        const m = src.match(/^[ \t]*(?:\\\[|\$\$)/m);
+        return m ? m.index : undefined;
+      },
+      tokenizer(src) {
+        const match = src.match(
+          /^[ \t]*(?:\\\[([\s\S]*?)\\\]|\$\$[ \t]*\r?\n([\s\S]*?)\r?\n\$\$|\$\$([^\$\r\n]+)\$\$)[ \t]*(?:\r?\n|$)/,
+        );
+        if (match) {
+          const mathExpr = (match[1] ?? match[2] ?? match[3]).trim();
+          return {
+            type: 'displayMath',
             raw: match[0],
             math: mathExpr,
           };
         }
       },
       renderer(token: Tokens.Generic) {
-        return `<span class="gl-math-inline" data-math-style="inline">${escapeHtml(token.math)}</span>`;
+        return `<div class="gl-math-block" data-math-style="display">${escapeHtml(token.math)}</div>\n`;
       },
     });
   }
@@ -415,11 +457,13 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
         }
 
         if (token.mediaType === 'video') {
-          return `<video src="${escapeHtml(token.href)}" controls${titleAttr}${dimAttrs}><a href="${escapeHtml(token.href)}">${escapeHtml(token.text)}</a></video>`;
+          const mediaTitle = token.title || token.text;
+          return `<span class="media-container video-container"><video src="${escapeHtml(token.href)}" controls preload="metadata" class="gl-rounded-lg" data-setup="{}" data-title="${escapeHtml(mediaTitle)}"${titleAttr}${dimAttrs}><a href="${escapeHtml(token.href)}">${escapeHtml(token.text)}</a></video></span>`;
         }
 
         if (token.mediaType === 'audio') {
-          return `<audio src="${escapeHtml(token.href)}" controls${titleAttr}><a href="${escapeHtml(token.href)}">${escapeHtml(token.text)}</a></audio>`;
+          const mediaTitle = token.title || token.text;
+          return `<span class="media-container audio-container"><audio src="${escapeHtml(token.href)}" controls data-setup="{}" data-title="${escapeHtml(mediaTitle)}"${titleAttr}><a href="${escapeHtml(token.href)}">${escapeHtml(token.text)}</a></audio></span>`;
         }
 
         return `<img src="${escapeHtml(token.href)}" alt="${escapeHtml(token.text)}"${titleAttr}${dimAttrs}>`;
@@ -434,10 +478,10 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
       level: 'inline',
       start(src) {
         const escIdx = src.search(
-          /\\(?:[@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):)/,
+          /\\(?:[@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):|[A-Z]{2,}[A-Z0-9_]*-\d+|\/?(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+[>~%]|(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+>)/,
         );
         const sigilIdx = src.search(
-          /[@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):|\[\[|\*iteration:/,
+          /[@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):|\[\[|\*iteration:|[A-Z]{2,}[A-Z0-9_]*-\d+|\/?(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+>|https?:\/\/[^\s/]+(?:\/groups)?\/[a-zA-Z0-9_\-.]+\/(?:-\/)?(?:issues|merge_requests|epics|wikis)/,
         );
 
         let earliest = -1;
@@ -446,7 +490,7 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
         }
         if (sigilIdx !== -1) {
           const before = src.slice(0, sigilIdx);
-          const projMatch = before.match(/(?:^|[\s(])((?:[a-zA-Z0-9_\-.]+\/)?[a-zA-Z0-9_\-.]+)$/);
+          const projMatch = before.match(/(?:^|[\s(])(\/?(?:[a-zA-Z0-9_\-.]+\/)*[a-zA-Z0-9_\-.]+)$/);
           const startIdx = projMatch ? sigilIdx - projMatch[1].length : sigilIdx;
           if (earliest === -1 || startIdx < earliest) {
             earliest = startIdx;
@@ -467,7 +511,7 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
       },
       tokenizer(src) {
         const escaped = src.match(
-          /^\\(\^alert#\d+|[@#!~$%&]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):[^\]]+\])/,
+          /^\\(\^alert#\d+|[@#!~$%&]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):[^\]]+\]|[A-Z]{2,}[A-Z0-9_]*-\d+|\/?(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+[>~%]|(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+>)/,
         );
         if (escaped) {
           return {
@@ -482,16 +526,21 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
           return {
             type: 'gitlabReference',
             raw: ref.raw,
+            refType: ref.type,
             href: ref.href,
             text: ref.text,
             className: ref.className,
             title: ref.title,
+            isUrl: ref.isUrl,
           };
         }
       },
       renderer(token: Tokens.Generic) {
         const titleAttr = token.title ? ` title="${escapeHtml(token.title)}"` : '';
-        return `<a href="${escapeHtml(token.href)}" class="${token.className}"${titleAttr}>${escapeHtml(token.text)}</a>`;
+        const refTypeAttr = ` data-reference-type="${escapeHtml(token.refType)}"`;
+        const originalAttr = ` data-original="${escapeHtml(token.raw)}"`;
+        const linkAttr = ` data-link="${token.isUrl ? 'true' : 'false'}"`;
+        return `<a href="${escapeHtml(token.href)}" class="${token.className}"${refTypeAttr}${originalAttr}${linkAttr}${titleAttr}>${escapeHtml(token.text)}</a>`;
       },
     });
   }
@@ -521,6 +570,81 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
       },
       renderer(token: Tokens.Generic) {
         return token.html;
+      },
+    });
+  }
+
+  // Footnote reference (inline): [^identifier]
+  if (footnotes) {
+    extensions.push({
+      name: 'footnoteRef',
+      level: 'inline',
+      start(src) {
+        return src.indexOf('[^');
+      },
+      tokenizer(src) {
+        const match = src.match(/^\[\^([^\]]+)\]/);
+        if (match) {
+          return {
+            type: 'footnoteRef',
+            raw: match[0],
+            identifier: match[1],
+          };
+        }
+      },
+      renderer(token: Tokens.Generic) {
+        const id = token.identifier;
+        return `<sup class="footnote-ref"><a href="#fn-${escapeHtml(id)}" id="fnref-${escapeHtml(id)}" data-footnote-ref>${token.index}</a></sup>`;
+      },
+    });
+
+    // Footnote definition (block): [^identifier]: content
+    extensions.push({
+      name: 'footnoteDef',
+      level: 'block',
+      start(src) {
+        return src.search(/^\[\^/m);
+      },
+      tokenizer(src) {
+        const match = src.match(/^\[\^([^\]]+)\]:[ \t]+([^\n]+(?:\n(?!\[\^|\n)[^\n]+)*)(?:\r?\n|$)/);
+        if (match) {
+          const tokens: Token[] = [];
+          this.lexer.blockTokens(match[2].trim(), tokens);
+          return {
+            type: 'footnoteDef',
+            raw: match[0],
+            identifier: match[1],
+            tokens,
+          };
+        }
+      },
+      renderer() {
+        // Definitions are collected and rendered as a section at the end
+        return '';
+      },
+    });
+
+    // Footnote section (synthetic block injected at end of document)
+    extensions.push({
+      name: 'footnoteSection',
+      level: 'block',
+      renderer(token: Tokens.Generic) {
+        const defs = token.definitions as Map<string, { tokens: Token[] }>;
+        const order = token.order as Map<string, number>;
+        const sortedEntries = Array.from(defs.entries()).sort(([idA], [idB]) => {
+          const orderA = order.get(idA) ?? Number.MAX_SAFE_INTEGER;
+          const orderB = order.get(idB) ?? Number.MAX_SAFE_INTEGER;
+          return orderA - orderB;
+        });
+
+        let html = '<section class="footnotes" data-footnotes>\n<ol>\n';
+        for (const [id, def] of sortedEntries) {
+          const content = this.parser.parse(def.tokens).replace(/^\s*<p>|<\/p>\s*$/g, '');
+          const index = order.get(id) ?? id;
+          html += `<li id="fn-${escapeHtml(id)}">\n<p>${content} <a href="#fnref-${escapeHtml(id)}" class="footnote-backref" data-footnote-backref aria-label="Back to reference ${index}">↩</a></p>\n</li>\n`;
+        }
+        html += '</ol>\n</section>\n';
+        return html;
       },
     });
   }
@@ -555,6 +679,8 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
       processAllTokens(tokens: Token[]) {
         const slugCounts = new Map<string, number>();
         currentHeadings = [];
+        const footnoteOrder = new Map<string, number>();
+        let footnoteCounter = 0;
 
         const walk = (toks: Token[]) => {
           for (let i = 0; i < toks.length; i++) {
@@ -566,6 +692,16 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
               const slug = generateGitlabSlug(h.text, slugCounts);
               h.anchor = slug;
               currentHeadings.push({ depth: h.depth, text: h.text, slug });
+            }
+
+            // Footnote reference index assignment
+            if (footnotes && tok.type === 'footnoteRef') {
+              const ft = tok as Tokens.Generic;
+              if (!footnoteOrder.has(ft.identifier)) {
+                footnoteCounter++;
+                footnoteOrder.set(ft.identifier, footnoteCounter);
+              }
+              ft.index = footnoteOrder.get(ft.identifier);
             }
 
             // Standard blockquote alerts conversion: > [!note]
@@ -621,6 +757,40 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
               }
             }
 
+            // Task list checkboxes in table cells: | [x] | or | [ ] | or | [~] |
+            if (taskLists && tok.type === 'table') {
+              const table = tok as Tokens.Table;
+              const processCell = (cell: Tokens.TableCell) => {
+                if (cell.tokens?.length === 1 && cell.tokens[0]?.type === 'text') {
+                  const match = cell.tokens[0].text.match(/^\s*\[([\s~xX])\]\s*$/);
+                  if (match) {
+                    const mark = match[1].toLowerCase();
+                    const checked = mark === 'x' ? ' checked' : '';
+                    const inapp = mark === '~' ? ' data-inapplicable="true"' : '';
+                    const checkboxHtml = `<input type="checkbox" disabled class="task-list-item-checkbox"${checked}${inapp}> `;
+                    (cell as CustomTableCell).taskTableItem = true;
+                    cell.tokens = [
+                      {
+                        type: 'html',
+                        raw: checkboxHtml,
+                        text: checkboxHtml,
+                        block: false,
+                      } as Token,
+                    ];
+                  }
+                }
+              };
+
+              for (const cell of table.header) {
+                processCell(cell);
+              }
+              for (const row of table.rows) {
+                for (const cell of row) {
+                  processCell(cell);
+                }
+              }
+            }
+
             // Nested tokens
             if ('tokens' in tok && Array.isArray(tok.tokens)) {
               walk(tok.tokens);
@@ -646,6 +816,32 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
         };
         assignToc(tokens);
 
+        // Collect footnote definitions and append footnote section
+        if (footnotes) {
+          footnoteDefinitions = new Map();
+          const collectFootnotes = (toks: Token[]) => {
+            for (const tok of toks) {
+              if (tok.type === 'footnoteDef') {
+                const ft = tok as Tokens.Generic;
+                footnoteDefinitions.set(ft.identifier, { tokens: ft.tokens! });
+              }
+              if ('tokens' in tok && Array.isArray(tok.tokens)) {
+                collectFootnotes(tok.tokens);
+              }
+            }
+          };
+          collectFootnotes(tokens);
+
+          if (footnoteDefinitions.size > 0) {
+            tokens.push({
+              type: 'footnoteSection',
+              raw: '',
+              definitions: footnoteDefinitions,
+              order: footnoteOrder,
+            } as unknown as Token);
+          }
+        }
+
         return tokens;
       },
     },
@@ -655,7 +851,10 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
           return false;
         }
         const slug = (token as CustomHeading).anchor!;
-        return `<h${token.depth} id="${slug}">${this.parser.parseInline(token.tokens)}</h${token.depth}>\n`;
+        const content = this.parser.parseInline(token.tokens);
+        const rawText = token.text;
+        const anchor = `<a href="#${slug}" aria-label="Link to heading '${escapeHtml(rawText)}'" data-heading-content="${escapeHtml(rawText)}" class="anchor"></a>`;
+        return `<h${token.depth} id="${slug}">${content}${anchor}</h${token.depth}>\n`;
       },
 
       codespan(token: Tokens.Codespan) {
@@ -689,6 +888,18 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
         return false;
       },
 
+      tablecell(cell: Tokens.TableCell) {
+        if (!taskLists) {
+          return false;
+        }
+        if ((cell as CustomTableCell).taskTableItem) {
+          const tag = cell.header ? 'th' : 'td';
+          const align = cell.align ? ` align="${cell.align}"` : '';
+          return `<${tag}${align} class="task-table-item">${this.parser.parseInline(cell.tokens)}</${tag}>\n`;
+        }
+        return false;
+      },
+
       code(token: Tokens.Code) {
         const lang = token.lang?.trim();
 
@@ -700,6 +911,11 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
         // Math blocks
         if (math && lang === 'math') {
           return `<div class="gl-math-block" data-math-style="display">${escapeHtml(token.text)}</div>\n`;
+        }
+
+        // GLQL blocks
+        if (glql && lang === 'glql') {
+          return `<div class="glql-wrapper" data-glql><pre class="glql"><code>${escapeHtml(token.text)}</code></pre></div>\n`;
         }
 
         // JSON tables
