@@ -31,9 +31,9 @@ describe('marked-gitlab', () => {
       const input = '[[_TOC_]]\n\n# Section One\n\n## Sub Section\n\n# Section Two\n';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<h1 id="section-one">Section One<\/h1>/);
-      t.assert.match(html, /<h2 id="sub-section">Sub Section<\/h2>/);
-      t.assert.match(html, /<h1 id="section-two">Section Two<\/h1>/);
+      t.assert.match(html, /<h1 id="section-one">Section One<a href="#section-one" aria-label="Link to heading 'Section One'" data-heading-content="Section One" class="anchor"><\/a><\/h1>/);
+      t.assert.match(html, /<h2 id="sub-section">Sub Section<a href="#sub-section" aria-label="Link to heading 'Sub Section'" data-heading-content="Sub Section" class="anchor"><\/a><\/h2>/);
+      t.assert.match(html, /<h1 id="section-two">Section Two<a href="#section-two" aria-label="Link to heading 'Section Two'" data-heading-content="Section Two" class="anchor"><\/a><\/h1>/);
       t.assert.match(html, /<ul class="section-nav">/);
       t.assert.match(html, /<a href="#section-one">Section One<\/a>/);
       t.assert.match(html, /<a href="#sub-section">Sub Section<\/a>/);
@@ -180,12 +180,12 @@ describe('marked-gitlab', () => {
       const input = '- `#F00`\n- `#FF0000AA`\n- `RGB(0,255,0)`\n- `RGBA(0,255,0,0.3)`\n- `HSL(540,70%,50%)`\n- `HSLA(540,70%,50%,0.3)`';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<span class="gl-color-chip" style="background-color: #F00;"><\/span>#F00/);
-      t.assert.match(html, /<span class="gl-color-chip" style="background-color: #FF0000AA;"><\/span>#FF0000AA/);
-      t.assert.match(html, /<span class="gl-color-chip" style="background-color: RGB\(0,255,0\);"><\/span>RGB\(0,255,0\)/);
-      t.assert.match(html, /<span class="gl-color-chip" style="background-color: RGBA\(0,255,0,0.3\);"><\/span>RGBA\(0,255,0,0.3\)/);
-      t.assert.match(html, /<span class="gl-color-chip" style="background-color: HSL\(540,70%,50%\);"><\/span>HSL\(540,70%,50%\)/);
-      t.assert.match(html, /<span class="gl-color-chip" style="background-color: HSLA\(540,70%,50%,0.3\);"><\/span>HSLA\(540,70%,50%,0.3\)/);
+      t.assert.match(html, /<code>#F00<span class="gfm-color_chip"><span style="background-color: #F00;"><\/span><\/span><\/code>/);
+      t.assert.match(html, /<code>#FF0000AA<span class="gfm-color_chip"><span style="background-color: #FF0000AA;"><\/span><\/span><\/code>/);
+      t.assert.match(html, /<code>RGB\(0,255,0\)<span class="gfm-color_chip"><span style="background-color: RGB\(0,255,0\);"><\/span><\/span><\/code>/);
+      t.assert.match(html, /<code>RGBA\(0,255,0,0\.3\)<span class="gfm-color_chip"><span style="background-color: RGBA\(0,255,0,0\.3\);"><\/span><\/span><\/code>/);
+      t.assert.match(html, /<code>HSL\(540,70%,50%\)<span class="gfm-color_chip"><span style="background-color: HSL\(540,70%,50%\);"><\/span><\/span><\/code>/);
+      t.assert.match(html, /<code>HSLA\(540,70%,50%,0\.3\)<span class="gfm-color_chip"><span style="background-color: HSLA\(540,70%,50%,0\.3\);"><\/span><\/span><\/code>/);
     });
 
     test('recognizes modern space-separated CSS color syntax', (t) => {
@@ -194,11 +194,11 @@ describe('marked-gitlab', () => {
       const input = '- `rgb(255 0 0)`\n- `rgb(255 0 0 / 50%)`\n- `rgb(255 0 0 / 0.5)`\n- `hsl(0 100% 50%)`\n- `hsl(0 100% 50% / 0.5)`';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<span class="gl-color-chip" style="background-color: rgb\(255 0 0\);"><\/span>rgb\(255 0 0\)/);
-      t.assert.match(html, /<span class="gl-color-chip" style="background-color: rgb\(255 0 0 \/ 50%\);"><\/span>rgb\(255 0 0 \/ 50%\)/);
-      t.assert.match(html, /<span class="gl-color-chip" style="background-color: rgb\(255 0 0 \/ 0\.5\);"><\/span>rgb\(255 0 0 \/ 0\.5\)/);
-      t.assert.match(html, /<span class="gl-color-chip" style="background-color: hsl\(0 100% 50%\);"><\/span>hsl\(0 100% 50%\)/);
-      t.assert.match(html, /<span class="gl-color-chip" style="background-color: hsl\(0 100% 50% \/ 0\.5\);"><\/span>hsl\(0 100% 50% \/ 0\.5\)/);
+      t.assert.match(html, /<code>rgb\(255 0 0\)<span class="gfm-color_chip"><span style="background-color: rgb\(255 0 0\);"><\/span><\/span><\/code>/);
+      t.assert.match(html, /<code>rgb\(255 0 0 \/ 50%\)<span class="gfm-color_chip"><span style="background-color: rgb\(255 0 0 \/ 50%\);"><\/span><\/span><\/code>/);
+      t.assert.match(html, /<code>rgb\(255 0 0 \/ 0\.5\)<span class="gfm-color_chip"><span style="background-color: rgb\(255 0 0 \/ 0\.5\);"><\/span><\/span><\/code>/);
+      t.assert.match(html, /<code>hsl\(0 100% 50%\)<span class="gfm-color_chip"><span style="background-color: hsl\(0 100% 50%\);"><\/span><\/span><\/code>/);
+      t.assert.match(html, /<code>hsl\(0 100% 50% \/ 0\.5\)<span class="gfm-color_chip"><span style="background-color: hsl\(0 100% 50% \/ 0\.5\);"><\/span><\/span><\/code>/);
     });
 
     test('escapes color codes with backslash to omit color chip', (t) => {
@@ -210,7 +210,7 @@ describe('marked-gitlab', () => {
       t.assert.match(html, /<code>#FF0000<\/code>/);
       t.assert.match(html, /<code>RGB\(255,0,0\)<\/code>/);
       t.assert.match(html, /<code>HSL\(0,100%,50%\)<\/code>/);
-      t.assert.doesNotMatch(html, /gl-color-chip/);
+      t.assert.doesNotMatch(html, /gfm-color_chip/);
     });
 
     test('does not affect regular codespans', (t) => {
@@ -218,7 +218,7 @@ describe('marked-gitlab', () => {
       marked.use(markedGitlab());
       const html = marked.parse('`const x = 10;`') as string;
       t.assert.match(html, /<code>const x = 10;<\/code>/);
-      t.assert.doesNotMatch(html, /gl-color-chip/);
+      t.assert.doesNotMatch(html, /gfm-color_chip/);
     });
 
     test('color helper functions test edge cases', (t) => {
@@ -231,7 +231,7 @@ describe('marked-gitlab', () => {
       const marked = new Marked();
       marked.use(markedGitlab({ colorChips: false }));
       const html = marked.parse('`#FF0000`') as string;
-      t.assert.doesNotMatch(html, /gl-color-chip/);
+      t.assert.doesNotMatch(html, /gfm-color_chip/);
     });
   });
 
@@ -295,10 +295,10 @@ describe('marked-gitlab', () => {
       const input = '- {+ addition 1 +}\n- [+ addition 2 +]\n- {- deletion 1 -}\n- [- deletion 2 -]';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<ins class="diff addition">addition 1<\/ins>/);
-      t.assert.match(html, /<ins class="diff addition">addition 2<\/ins>/);
-      t.assert.match(html, /<del class="diff deletion">deletion 1<\/del>/);
-      t.assert.match(html, /<del class="diff deletion">deletion 2<\/del>/);
+      t.assert.match(html, /<span class="idiff left right addition">addition 1<\/span>/);
+      t.assert.match(html, /<span class="idiff left right addition">addition 2<\/span>/);
+      t.assert.match(html, /<span class="idiff left right deletion">deletion 1<\/span>/);
+      t.assert.match(html, /<span class="idiff left right deletion">deletion 2<\/span>/);
     });
 
     test('supports inline formatting inside diffs', (t) => {
@@ -307,7 +307,7 @@ describe('marked-gitlab', () => {
       const input = '{+ Added **bold** text +}';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<ins class="diff addition">Added <strong>bold<\/strong> text<\/ins>/);
+      t.assert.match(html, /<span class="idiff left right addition">Added <strong>bold<\/strong> text<\/span>/);
     });
 
     test('inlineDiffs can be disabled in options', (t) => {
@@ -316,7 +316,7 @@ describe('marked-gitlab', () => {
       const input = '{+ addition +}';
       const html = marked.parse(input) as string;
 
-      t.assert.doesNotMatch(html, /<ins class="diff addition">/);
+      t.assert.doesNotMatch(html, /<span class="idiff/);
     });
   });
 
@@ -388,16 +388,17 @@ describe('marked-gitlab', () => {
       const input = '![Sample Video](img/video.mp4 "Video Title")';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<video src="img\/video\.mp4" controls title="Video Title"><a href="img\/video\.mp4">Sample Video<\/a><\/video>/);
+      t.assert.match(html, /<span class="media-container video-container"><video src="img\/video\.mp4" controls preload="metadata" class="gl-rounded-lg" data-setup="{}" data-title="Video Title" title="Video Title"><a href="img\/video\.mp4">Sample Video<\/a><\/video><\/span>/);
     });
 
     test('renders audio players for valid audio extensions', (t) => {
       const marked = new Marked();
       marked.use(markedGitlab());
-      const input = '![Sample Audio](audio.mp3 "Audio Title")';
+      const input = '![Sample Audio](audio.mp3 "Audio Title")\n\n[Audio Without Title](audio.mp3)';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<audio src="audio\.mp3" controls title="Audio Title"><a href="audio\.mp3">Sample Audio<\/a><\/audio>/);
+      t.assert.match(html, /<span class="media-container audio-container"><audio src="audio\.mp3" controls data-setup="{}" data-title="Audio Title" title="Audio Title"><a href="audio\.mp3">Sample Audio<\/a><\/audio><\/span>/);
+      t.assert.match(html, /<span class="media-container audio-container"><audio src="audio\.mp3" controls data-setup="{}" data-title="Audio Without Title"><a href="audio\.mp3">Audio Without Title<\/a><\/audio><\/span>/);
     });
 
     test('renders images with width and height dimensions', (t) => {
@@ -417,14 +418,14 @@ describe('marked-gitlab', () => {
       const input = '[Sample Video](img/video.mp4)';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<video src="img\/video\.mp4" controls><a href="img\/video\.mp4">Sample Video<\/a><\/video>/);
+      t.assert.match(html, /<span class="media-container video-container"><video src="img\/video\.mp4" controls preload="metadata" class="gl-rounded-lg" data-setup="{}" data-title="Sample Video"><a href="img\/video\.mp4">Sample Video<\/a><\/video><\/span>/);
     });
 
     test('renders .3gp video files', (t) => {
       const marked = new Marked();
       marked.use(markedGitlab());
       const html = marked.parse('![3GP Video](clip.3gp)') as string;
-      t.assert.match(html, /<video src="clip\.3gp" controls><a href="clip\.3gp">3GP Video<\/a><\/video>/);
+      t.assert.match(html, /<span class="media-container video-container"><video src="clip\.3gp" controls preload="metadata" class="gl-rounded-lg" data-setup="{}" data-title="3GP Video"><a href="clip\.3gp">3GP Video<\/a><\/video><\/span>/);
     });
 
     test('standard images without dimensions or media extensions use standard img', (t) => {
@@ -575,7 +576,7 @@ describe('marked-gitlab', () => {
       const html = marked.parse(input) as string;
 
       t.assert.match(html, /<pre class="gl-front-matter" data-lang="yaml"><code>title: Hello\nexample: yaml<\/code><\/pre>/);
-      t.assert.match(html, /<h1 id="post-content">Post Content<\/h1>/);
+      t.assert.match(html, /<h1 id="post-content">Post Content<a href="#post-content" aria-label="Link to heading 'Post Content'" data-heading-content="Post Content" class="anchor"><\/a><\/h1>/);
     });
 
     test('renders TOML, JSON, and custom lang front matter', (t) => {
@@ -598,7 +599,7 @@ describe('marked-gitlab', () => {
 
       t.assert.doesNotMatch(html, /gl-front-matter/);
       t.assert.doesNotMatch(html, /Strip Me/);
-      t.assert.match(html, /<h1 id="header">Header<\/h1>/);
+      t.assert.match(html, /<h1 id="header">Header<a href="#header" aria-label="Link to heading 'Header'" data-heading-content="Header" class="anchor"><\/a><\/h1>/);
     });
 
     test('replaces placeholders with configured values', (t) => {
@@ -636,7 +637,7 @@ describe('marked-gitlab', () => {
       const input = 'Before\n::include{file=part.md}\n::include{file=missing.md}\nAfter';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<h3 id="included-title">Included Title<\/h3>/);
+      t.assert.match(html, /<h3 id="included-title">Included Title<a href="#included-title" aria-label="Link to heading 'Included Title'" data-heading-content="Included Title" class="anchor"><\/a><\/h3>/);
       t.assert.match(html, /::include\{file=missing\.md\}/);
     });
   });
@@ -648,12 +649,12 @@ describe('marked-gitlab', () => {
       const input = 'Mention @user and @group/subgroup and @all. See #123, !456, $789, and &999.';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/user" class="gfm gfm-project_member">@user<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/group\/subgroup" class="gfm gfm-project_member">@group\/subgroup<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/123" class="gfm gfm-issue">#123<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/merge_requests\/456" class="gfm gfm-merge_request">!456<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/snippets\/789" class="gfm gfm-snippet">\$789<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/epics\/999" class="gfm gfm-epic">&amp;999<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/user" class="gfm gfm-project_member" data-reference-type="user" data-original="@user" data-link="false">@user<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/group\/subgroup" class="gfm gfm-project_member" data-reference-type="user" data-original="@group\/subgroup" data-link="false">@group\/subgroup<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/123" class="gfm gfm-issue" data-reference-type="issue" data-original="#123" data-link="false">#123<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/merge_requests\/456" class="gfm gfm-merge_request" data-reference-type="merge_request" data-original="!456" data-link="false">!456<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/snippets\/789" class="gfm gfm-snippet" data-reference-type="snippet" data-original="\$789" data-link="false">\$789<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/epics\/999" class="gfm gfm-epic" data-reference-type="epic" data-original="&amp;999" data-link="false">&amp;999<\/a>/);
     });
 
     test('parses cross-project references and title suffixes (+ and +s)', (t) => {
@@ -662,9 +663,9 @@ describe('marked-gitlab', () => {
       const input = 'See other/proj#42 and #100+ and !200+s.';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/other\/proj\/-\/issues\/42" class="gfm gfm-issue">other\/proj#42<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/default\/proj\/-\/issues\/100" class="gfm gfm-issue" title="Show issue title">#100\+<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/default\/proj\/-\/merge_requests\/200" class="gfm gfm-merge_request" title="Show merge_request summary">!200\+s<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/other\/proj\/-\/issues\/42" class="gfm gfm-issue" data-reference-type="issue" data-original="other\/proj#42" data-link="false">other\/proj#42<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/default\/proj\/-\/issues\/100" class="gfm gfm-issue" data-reference-type="issue" data-original="#100\+" data-link="false" title="Show issue title">#100\+<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/default\/proj\/-\/merge_requests\/200" class="gfm gfm-merge_request" data-reference-type="merge_request" data-original="!200\+s" data-link="false" title="Show merge_request summary">!200\+s<\/a>/);
     });
 
     test('parses labels, milestones, iterations, alerts, contacts, wikis', (t) => {
@@ -675,15 +676,15 @@ describe('marked-gitlab', () => {
         + 'Wiki [[Home]] and [[User Guide|user-guide]].';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /class="gfm gfm-label">~bug<\/a>/);
-      t.assert.match(html, /class="gfm gfm-label">~&quot;feature request&quot;<\/a>/);
-      t.assert.match(html, /class="gfm gfm-milestone" title="v1\.0">%v1\.0<\/a>/);
-      t.assert.match(html, /class="gfm gfm-milestone" title="release 2">%(&quot;|")release 2(&quot;|")<\/a>/);
-      t.assert.match(html, /class="gfm gfm-iteration" title="Sprint 1">\*iteration:&quot;Sprint 1&quot;<\/a>/);
-      t.assert.match(html, /class="gfm gfm-alert">\^alert#123<\/a>/);
-      t.assert.match(html, /<a href="mailto:test@example\.com" class="gfm gfm-contact">\[contact:test@example\.com\]<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/wikis\/Home" class="gfm gfm-wiki_page">Home<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/wikis\/user-guide" class="gfm gfm-wiki_page">User Guide<\/a>/);
+      t.assert.match(html, /class="gfm gfm-label" data-reference-type="label" data-original="~bug" data-link="false">~bug<\/a>/);
+      t.assert.match(html, /class="gfm gfm-label" data-reference-type="label" data-original="~&quot;feature request&quot;" data-link="false">~&quot;feature request&quot;<\/a>/);
+      t.assert.match(html, /class="gfm gfm-milestone" data-reference-type="milestone" data-original="%v1\.0" data-link="false" title="v1\.0">%v1\.0<\/a>/);
+      t.assert.match(html, /class="gfm gfm-milestone" data-reference-type="milestone" data-original="%&quot;release 2&quot;" data-link="false" title="release 2">%(&quot;|")release 2(&quot;|")<\/a>/);
+      t.assert.match(html, /class="gfm gfm-iteration" data-reference-type="iteration" data-original="\*iteration:&quot;Sprint 1&quot;" data-link="false" title="Sprint 1">\*iteration:&quot;Sprint 1&quot;<\/a>/);
+      t.assert.match(html, /class="gfm gfm-alert" data-reference-type="alert" data-original="\^alert#123" data-link="false">\^alert#123<\/a>/);
+      t.assert.match(html, /<a href="mailto:test@example\.com" class="gfm gfm-contact" data-reference-type="contact" data-original="\[contact:test@example\.com\]" data-link="false">\[contact:test@example\.com\]<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/wikis\/Home" class="gfm gfm-wiki_page" data-reference-type="wiki_page" data-original="\[\[Home\]\]" data-link="false">Home<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/wikis\/user-guide" class="gfm gfm-wiki_page" data-reference-type="wiki_page" data-original="\[\[User Guide\|user-guide\]\]" data-link="false">User Guide<\/a>/);
     });
 
     test('parses bracket references and commits', (t) => {
@@ -693,15 +694,15 @@ describe('marked-gitlab', () => {
         + 'Commit other@9ba12248 and range 9ba12248...b19a04f5.';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /class="gfm gfm-issue">\[issue:123\]<\/a>/);
-      t.assert.match(html, /class="gfm gfm-work_item">\[work_item:456\]<\/a>/);
-      t.assert.match(html, /class="gfm gfm-epic">\[epic:789\]<\/a>/);
-      t.assert.match(html, /class="gfm gfm-cadence">\[cadence:1\]<\/a>/);
-      t.assert.match(html, /class="gfm gfm-vulnerability">\[vulnerability:10\]<\/a>/);
-      t.assert.match(html, /class="gfm gfm-feature_flag">\[feature_flag:20\]<\/a>/);
-      t.assert.match(html, /class="gfm gfm-wiki_page">\[wiki_page:Help\]<\/a>/);
-      t.assert.match(html, /class="gfm gfm-commit">other@9ba12248<\/a>/);
-      t.assert.match(html, /class="gfm gfm-commit_range">9ba12248\.\.\.b19a04f5<\/a>/);
+      t.assert.match(html, /class="gfm gfm-issue" data-reference-type="issue" data-original="\[issue:123\]" data-link="false">\[issue:123\]<\/a>/);
+      t.assert.match(html, /class="gfm gfm-work_item" data-reference-type="work_item" data-original="\[work_item:456\]" data-link="false">\[work_item:456\]<\/a>/);
+      t.assert.match(html, /class="gfm gfm-epic" data-reference-type="epic" data-original="\[epic:789\]" data-link="false">\[epic:789\]<\/a>/);
+      t.assert.match(html, /class="gfm gfm-cadence" data-reference-type="cadence" data-original="\[cadence:1\]" data-link="false">\[cadence:1\]<\/a>/);
+      t.assert.match(html, /class="gfm gfm-vulnerability" data-reference-type="vulnerability" data-original="\[vulnerability:10\]" data-link="false">\[vulnerability:10\]<\/a>/);
+      t.assert.match(html, /class="gfm gfm-feature_flag" data-reference-type="feature_flag" data-original="\[feature_flag:20\]" data-link="false">\[feature_flag:20\]<\/a>/);
+      t.assert.match(html, /class="gfm gfm-wiki_page" data-reference-type="wiki_page" data-original="\[wiki_page:Help\]" data-link="false">\[wiki_page:Help\]<\/a>/);
+      t.assert.match(html, /class="gfm gfm-commit" data-reference-type="commit" data-original="other@9ba12248" data-link="false">other@9ba12248<\/a>/);
+      t.assert.match(html, /class="gfm gfm-commit_range" data-reference-type="commit_range" data-original="9ba12248\.\.\.b19a04f5" data-link="false">9ba12248\.\.\.b19a04f5<\/a>/);
     });
 
     test('parses project references, issue keys, cadence titles, and GitLab URLs', (t) => {
@@ -715,18 +716,18 @@ describe('marked-gitlab', () => {
         + 'Wiki URL https://gitlab.com/gitlab-org/gitlab/-/wikis/Home-page-new-slug.';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab" class="gfm gfm-project">gitlab-org\/gitlab<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/issues\/GL-123" class="gfm gfm-issue">GL-123<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/issues\/PROJ-456" class="gfm gfm-issue" title="Show issue title">PROJ-456\+<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/issues\/JIRA-789" class="gfm gfm-issue" title="Show issue summary">JIRA-789\+s<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/cadences\?title=Sprint%20Cadence" class="gfm gfm-cadence">\[cadence:&quot;Sprint Cadence&quot;\]<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/cadences\?title=plan" class="gfm gfm-cadence">\[cadence:plan\]<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234#note_101075757" class="gfm gfm-issue">#1234 \(comment 101075757\)<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/merge_requests\/567#note_999" class="gfm gfm-merge_request">!567 \(comment 999\)<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/groups\/gitlab-org\/-\/epics\/888#note_777" class="gfm gfm-epic">&amp;888 \(comment 777\)<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234\/designs" class="gfm gfm-issue">#1234 \(designs\)<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234\/designs\/layout\.png" class="gfm gfm-issue">#1234\[layout\.png\]<\/a>\./);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/wikis\/Home-page-new-slug" class="gfm gfm-wiki_page">Home page new slug<\/a>\./);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab" class="gfm gfm-project" data-reference-type="project" data-original="gitlab-org\/gitlab&gt;" data-link="false">gitlab-org\/gitlab<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/issues\/GL-123" class="gfm gfm-issue" data-reference-type="issue" data-original="GL-123" data-link="false">GL-123<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/issues\/PROJ-456" class="gfm gfm-issue" data-reference-type="issue" data-original="PROJ-456\+" data-link="false" title="Show issue title">PROJ-456\+<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/issues\/JIRA-789" class="gfm gfm-issue" data-reference-type="issue" data-original="JIRA-789\+s" data-link="false" title="Show issue summary">JIRA-789\+s<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/cadences\?title=Sprint%20Cadence" class="gfm gfm-cadence" data-reference-type="cadence" data-original="\[cadence:&quot;Sprint Cadence&quot;\]" data-link="false">\[cadence:&quot;Sprint Cadence&quot;\]<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/cadences\?title=plan" class="gfm gfm-cadence" data-reference-type="cadence" data-original="\[cadence:plan\]" data-link="false">\[cadence:plan\]<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234#note_101075757" class="gfm gfm-issue" data-reference-type="issue" data-original="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234#note_101075757" data-link="true">#1234 \(comment 101075757\)<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/merge_requests\/567#note_999" class="gfm gfm-merge_request" data-reference-type="merge_request" data-original="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/merge_requests\/567#note_999" data-link="true">!567 \(comment 999\)<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/groups\/gitlab-org\/-\/epics\/888#note_777" class="gfm gfm-epic" data-reference-type="epic" data-original="https:\/\/gitlab\.com\/groups\/gitlab-org\/-\/epics\/888#note_777" data-link="true">&amp;888 \(comment 777\)<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234\/designs" class="gfm gfm-issue" data-reference-type="issue" data-original="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234\/designs" data-link="true">#1234 \(designs\)<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234\/designs\/layout\.png" class="gfm gfm-issue" data-reference-type="issue" data-original="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234\/designs\/layout\.png" data-link="true">#1234\[layout\.png\]<\/a>\./);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/wikis\/Home-page-new-slug" class="gfm gfm-wiki_page" data-reference-type="wiki_page" data-original="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/wikis\/Home-page-new-slug" data-link="true">Home page new slug<\/a>\./);
     });
 
     test('escaped references are not linked and backslash is removed', (t) => {
@@ -763,17 +764,17 @@ describe('marked-gitlab', () => {
         + 'Other: https://gitlab.com/other-org/other-proj/-/issues/999';
       const htmlSame = markedSame.parse(inputSame) as string;
 
-      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234" class="gfm gfm-issue">#1234<\/a>/);
-      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/merge_requests\/567" class="gfm gfm-merge_request">!567<\/a>/);
-      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/groups\/gitlab-org\/-\/epics\/888" class="gfm gfm-epic">&amp;888<\/a>/);
-      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234\+" class="gfm gfm-issue" title="Show issue title">#1234\+<\/a>/);
-      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234\+s" class="gfm gfm-issue" title="Show issue summary">#1234\+s<\/a>/);
-      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/other-org\/other-proj\/-\/issues\/999" class="gfm gfm-issue">other-org\/other-proj#999<\/a>/);
+      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234" class="gfm gfm-issue" data-reference-type="issue" data-original="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234" data-link="true">#1234<\/a>/);
+      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/merge_requests\/567" class="gfm gfm-merge_request" data-reference-type="merge_request" data-original="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/merge_requests\/567" data-link="true">!567<\/a>/);
+      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/groups\/gitlab-org\/-\/epics\/888" class="gfm gfm-epic" data-reference-type="epic" data-original="https:\/\/gitlab\.com\/groups\/gitlab-org\/-\/epics\/888" data-link="true">&amp;888<\/a>/);
+      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234\+" class="gfm gfm-issue" data-reference-type="issue" data-original="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234\+" data-link="true" title="Show issue title">#1234\+<\/a>/);
+      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234\+s" class="gfm gfm-issue" data-reference-type="issue" data-original="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234\+s" data-link="true" title="Show issue summary">#1234\+s<\/a>/);
+      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/other-org\/other-proj\/-\/issues\/999" class="gfm gfm-issue" data-reference-type="issue" data-original="https:\/\/gitlab\.com\/other-org\/other-proj\/-\/issues\/999" data-link="true">other-org\/other-proj#999<\/a>/);
 
       const markedNone = new Marked();
       markedNone.use(markedGitlab());
       const htmlNone = markedNone.parse('https://gitlab.com/gitlab-org/gitlab/-/issues/1234') as string;
-      t.assert.match(htmlNone, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234" class="gfm gfm-issue">gitlab-org\/gitlab#1234<\/a>/);
+      t.assert.match(htmlNone, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234" class="gfm gfm-issue" data-reference-type="issue" data-original="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234" data-link="true">gitlab-org\/gitlab#1234<\/a>/);
     });
 
     test('supports cross-project wiki page references and wiki fragment anchors', (t) => {
@@ -782,10 +783,10 @@ describe('marked-gitlab', () => {
       const input = '[wiki_page:gitlab-org/gitlab:Home] and [wiki_page:group1/subgroup:Guide#intro] and [[Wiki#section]] and [[Custom Title|Page#anchor]].';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/wikis\/Home" class="gfm gfm-wiki_page">\[wiki_page:gitlab-org\/gitlab:Home\]<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/group1\/subgroup\/-\/wikis\/Guide#intro" class="gfm gfm-wiki_page">\[wiki_page:group1\/subgroup:Guide#intro\]<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/wikis\/Wiki#section" class="gfm gfm-wiki_page">Wiki#section<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/wikis\/Page#anchor" class="gfm gfm-wiki_page">Custom Title<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/wikis\/Home" class="gfm gfm-wiki_page" data-reference-type="wiki_page" data-original="\[wiki_page:gitlab-org\/gitlab:Home\]" data-link="false">\[wiki_page:gitlab-org\/gitlab:Home\]<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/group1\/subgroup\/-\/wikis\/Guide#intro" class="gfm gfm-wiki_page" data-reference-type="wiki_page" data-original="\[wiki_page:group1\/subgroup:Guide#intro\]" data-link="false">\[wiki_page:group1\/subgroup:Guide#intro\]<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/wikis\/Wiki#section" class="gfm gfm-wiki_page" data-reference-type="wiki_page" data-original="\[\[Wiki#section\]\]" data-link="false">Wiki#section<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/wikis\/Page#anchor" class="gfm gfm-wiki_page" data-reference-type="wiki_page" data-original="\[\[Custom Title\|Page#anchor\]\]" data-link="false">Custom Title<\/a>/);
     });
 
     test('supports leading slash on project prefixes for labels and milestones', (t) => {
@@ -794,9 +795,9 @@ describe('marked-gitlab', () => {
       const input = '/gitlab-org/gitlab~bug and /gitlab-org/gitlab~"feature request" and /gitlab-org/gitlab%16.0 and \\/gitlab-org/gitlab~escaped';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\?label_name=bug" class="gfm gfm-label">\/gitlab-org\/gitlab~bug<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\?label_name=feature%20request" class="gfm gfm-label">\/gitlab-org\/gitlab~&quot;feature request&quot;<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/milestones" class="gfm gfm-milestone" title="16\.0">\/gitlab-org\/gitlab%16\.0<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\?label_name=bug" class="gfm gfm-label" data-reference-type="label" data-original="\/gitlab-org\/gitlab~bug" data-link="false">\/gitlab-org\/gitlab~bug<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\?label_name=feature%20request" class="gfm gfm-label" data-reference-type="label" data-original="\/gitlab-org\/gitlab~&quot;feature request&quot;" data-link="false">\/gitlab-org\/gitlab~&quot;feature request&quot;<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/milestones" class="gfm gfm-milestone" data-reference-type="milestone" data-original="\/gitlab-org\/gitlab%16\.0" data-link="false" title="16\.0">\/gitlab-org\/gitlab%16\.0<\/a>/);
       t.assert.match(html, /\/gitlab-org\/gitlab~escaped/);
       t.assert.doesNotMatch(html, /label_name=escaped/);
     });
@@ -810,13 +811,13 @@ describe('marked-gitlab', () => {
         + 'Wiki [[WikiNoSlug]].';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/999" class="gfm gfm-issue">\[issue:gitlab-org\/gitlab\/999\]<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/commit\/0123456789abcdef0123456789abcdef01234567" class="gfm gfm-commit">0123456789abcdef0123456789abcdef01234567<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/group\/repo\/-\/compare\/9ba12248\.\.\.b19a04f5" class="gfm gfm-commit_range">group\/repo@9ba12248\.\.\.b19a04f5<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/other\/group\/-\/alert_management\/42" class="gfm gfm-alert">other\/group\^alert#42<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/other\/group\/-\/issues\?label_name=bug" class="gfm gfm-label">other\/group~bug<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/other\/group\/-\/milestones" class="gfm gfm-milestone" title="1\.0">other\/group%1\.0<\/a>/);
-      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/wikis\/WikiNoSlug" class="gfm gfm-wiki_page">WikiNoSlug<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/999" class="gfm gfm-issue" data-reference-type="issue" data-original="\[issue:gitlab-org\/gitlab\/999\]" data-link="false">\[issue:gitlab-org\/gitlab\/999\]<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/commit\/0123456789abcdef0123456789abcdef01234567" class="gfm gfm-commit" data-reference-type="commit" data-original="0123456789abcdef0123456789abcdef01234567" data-link="false">0123456789abcdef0123456789abcdef01234567<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/group\/repo\/-\/compare\/9ba12248\.\.\.b19a04f5" class="gfm gfm-commit_range" data-reference-type="commit_range" data-original="group\/repo@9ba12248\.\.\.b19a04f5" data-link="false">group\/repo@9ba12248\.\.\.b19a04f5<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/other\/group\/-\/alert_management\/42" class="gfm gfm-alert" data-reference-type="alert" data-original="other\/group\^alert#42" data-link="false">other\/group\^alert#42<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/other\/group\/-\/issues\?label_name=bug" class="gfm gfm-label" data-reference-type="label" data-original="other\/group~bug" data-link="false">other\/group~bug<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/other\/group\/-\/milestones" class="gfm gfm-milestone" data-reference-type="milestone" data-original="other\/group%1\.0" data-link="false" title="1\.0">other\/group%1\.0<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/wikis\/WikiNoSlug" class="gfm gfm-wiki_page" data-reference-type="wiki_page" data-original="\[\[WikiNoSlug\]\]" data-link="false">WikiNoSlug<\/a>/);
     });
 
     test('parseGitlabReference handles custom base URLs and defaults', (t) => {
@@ -896,11 +897,11 @@ describe('marked-gitlab', () => {
       const input = 'Something important.[^1]\n\n[^1]: This is the footnote content.';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<sup class="footnote-ref"><a href="#fn-1" id="fnref-1">1<\/a><\/sup>/);
+      t.assert.match(html, /<sup class="footnote-ref"><a href="#fn-1" id="fnref-1" data-footnote-ref>1<\/a><\/sup>/);
       t.assert.match(html, /<section class="footnotes" data-footnotes>/);
       t.assert.match(html, /<li id="fn-1">/);
       t.assert.match(html, /This is the footnote content\./);
-      t.assert.match(html, /<a href="#fnref-1" class="footnote-backref">↩<\/a>/);
+      t.assert.match(html, /<a href="#fnref-1" class="footnote-backref" data-footnote-backref aria-label="Back to reference 1">↩<\/a>/);
     });
 
     test('renders multiple footnotes', (t) => {
@@ -923,7 +924,7 @@ describe('marked-gitlab', () => {
       const input = 'See note[^note].\n\n[^note]: A named footnote.';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<a href="#fn-note" id="fnref-note">1<\/a>/);
+      t.assert.match(html, /<a href="#fn-note" id="fnref-note" data-footnote-ref>1<\/a>/);
       t.assert.match(html, /<li id="fn-note">/);
       t.assert.match(html, /A named footnote\./);
     });
@@ -935,8 +936,8 @@ describe('marked-gitlab', () => {
       const html = marked.parse(input) as string;
 
       // In text, [^beta] appears first -> numbered 1, [^alpha] appears second -> numbered 2
-      t.assert.match(html, /<sup class="footnote-ref"><a href="#fn-beta" id="fnref-beta">1<\/a><\/sup>/);
-      t.assert.match(html, /<sup class="footnote-ref"><a href="#fn-alpha" id="fnref-alpha">2<\/a><\/sup>/);
+      t.assert.match(html, /<sup class="footnote-ref"><a href="#fn-beta" id="fnref-beta" data-footnote-ref>1<\/a><\/sup>/);
+      t.assert.match(html, /<sup class="footnote-ref"><a href="#fn-alpha" id="fnref-alpha" data-footnote-ref>2<\/a><\/sup>/);
 
       // Section order should match appearance order (beta first, alpha second)
       const betaIdx = html.indexOf('<li id="fn-beta">');

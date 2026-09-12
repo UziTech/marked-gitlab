@@ -68,7 +68,7 @@ Recognizes color codes inside backticks (HEX, RGB, HSL) and renders visual color
 Rendered HTML:
 
 ```html
-<code><span class="gl-color-chip" style="background-color: #FF0000;"></span>#FF0000</code>
+<code>#FF0000<span class="gfm-color_chip"><span style="background-color: #FF0000;"></span></span></code>
 ```
 
 To display a color code without the preview chip, escape it with a backslash: `\`#FF0000\``.
@@ -110,8 +110,8 @@ Highlight added or deleted text using curly brace or square bracket notation:
 Rendered HTML:
 
 ```html
-<ins class="diff addition">added text</ins>
-<del class="diff deletion">deleted text</del>
+<span class="idiff left right addition">added text</span>
+<span class="idiff left right deletion">deleted text</span>
 ```
 
 ### 5. Table of Contents (`[[_TOC_]]` / `[TOC]`) & Heading Anchors
@@ -126,7 +126,11 @@ Insert a table of contents automatically generated from document headings:
 # Chapter 2
 ```
 
-Heading anchors follow GitLab's slugification rules (Unicode letter/digit preservation, space-to-hyphen conversion, punctuation removal, and duplicate deduplication `-1`, `-2`).
+Heading anchors follow GitLab's slugification rules (Unicode letter/digit preservation, space-to-hyphen conversion, punctuation removal, and duplicate deduplication `-1`, `-2`). Each heading includes a GLFM-compatible anchor element:
+
+```html
+<h1 id="chapter-1">Chapter 1<a href="#chapter-1" aria-label="Link to heading 'Chapter 1'" data-heading-content="Chapter 1" class="anchor"></a></h1>
+```
 
 ### 6. Task Lists & Inapplicable Items (`[~]`)
 
@@ -159,12 +163,18 @@ Task lists are also rendered inside Markdown table cells, either directly with `
 
 ### 7. Multimedia & Dimensions
 
-Automatically detects audio and video files, and supports dimension attributes `{width=... height=...}`:
+Automatically detects audio and video files, wraps them in media containers, and supports dimension attributes `{width=... height=...}`:
 
 ```markdown
 ![Video](media/demo.mp4)
 ![Audio](media/podcast.mp3)
 ![Logo](img/logo.png){width=100 height=50px}
+```
+
+Rendered HTML:
+
+```html
+<span class="media-container video-container"><video src="media/demo.mp4" controls preload="metadata" class="gl-rounded-lg" data-setup="{}" data-title="Video"><a href="media/demo.mp4">Video</a></video></span>
 ```
 
 ### 8. Diagrams, Math & JSON Tables
@@ -261,6 +271,12 @@ Parses GitLab's rich reference syntax into styled links:
 
 Prefix references with `\` to prevent linking (e.g. `\#123`, `\GL-123`, `\gitlab-org/gitlab>`).
 
+Rendered reference links include GLFM-standard attributes `data-reference-type`, `data-original`, and `data-link`:
+
+```html
+<a href="https://gitlab.com/gitlab-org/gitlab/-/issues/101" class="gfm gfm-issue" data-reference-type="issue" data-original="#101" data-link="false">#101</a>
+```
+
 ### 11. Footnotes
 
 Add footnotes to your content with inline references and definitions. Footnotes are automatically renumbered sequentially (`1`, `2`, `3`...) by appearance order in the document, regardless of whether identifiers are numbers or names:
@@ -277,14 +293,14 @@ Another claim.[^note]
 Rendered HTML:
 
 ```html
-<sup class="footnote-ref"><a href="#fn-1" id="fnref-1">1</a></sup>
+<sup class="footnote-ref"><a href="#fn-1" id="fnref-1" data-footnote-ref>1</a></sup>
 ...
-<sup class="footnote-ref"><a href="#fn-note" id="fnref-note">2</a></sup>
+<sup class="footnote-ref"><a href="#fn-note" id="fnref-note" data-footnote-ref>2</a></sup>
 ...
 <section class="footnotes" data-footnotes>
 <ol>
-<li id="fn-1"><p>This is the footnote content. <a href="#fnref-1" class="footnote-backref">↩</a></p></li>
-<li id="fn-note"><p>A named footnote with <strong>formatting</strong>. <a href="#fnref-note" class="footnote-backref">↩</a></p></li>
+<li id="fn-1"><p>This is the footnote content. <a href="#fnref-1" class="footnote-backref" data-footnote-backref aria-label="Back to reference 1">↩</a></p></li>
+<li id="fn-note"><p>A named footnote with <strong>formatting</strong>. <a href="#fnref-note" class="footnote-backref" data-footnote-backref aria-label="Back to reference 2">↩</a></p></li>
 </ol>
 </section>
 ```

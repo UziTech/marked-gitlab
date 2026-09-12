@@ -5,6 +5,7 @@ export interface ReferenceMatch {
   text: string;
   className: string;
   title?: string;
+  isUrl: boolean;
 }
 
 export function parseGitlabReference(
@@ -71,6 +72,7 @@ export function parseGitlabReference(
       href,
       text: bracketMatch[0],
       className,
+      isUrl: false,
     };
   }
 
@@ -84,6 +86,7 @@ export function parseGitlabReference(
       href: `${cleanBaseUrl}/${target}`,
       text: target,
       className: 'gfm gfm-project',
+      isUrl: false,
     };
   }
 
@@ -99,6 +102,7 @@ export function parseGitlabReference(
       text: issueKeyMatch[0],
       className: 'gfm gfm-issue',
       title: suffix ? `Show issue ${suffix === '+s' ? 'summary' : 'title'}` : undefined,
+      isUrl: false,
     };
   }
 
@@ -176,6 +180,7 @@ export function parseGitlabReference(
         text,
         className,
         title,
+        isUrl: true,
       };
     }
   }
@@ -193,6 +198,7 @@ export function parseGitlabReference(
       href: `${projectBase}/-/wikis/${encodeURIComponent(slug)}${hash}`,
       text: title,
       className: 'gfm gfm-wiki_page',
+      isUrl: false,
     };
   }
 
@@ -206,6 +212,7 @@ export function parseGitlabReference(
       text: iterationMatch[0],
       className: 'gfm gfm-iteration',
       title: iterationMatch[1],
+      isUrl: false,
     };
   }
 
@@ -219,6 +226,7 @@ export function parseGitlabReference(
       href: `${proj}/-/alert_management/${alertRefMatch[2]}`,
       text: alertRefMatch[0],
       className: 'gfm gfm-alert',
+      isUrl: false,
     };
   }
 
@@ -232,6 +240,7 @@ export function parseGitlabReference(
       href: `${proj}/-/compare/${commitRangeMatch[2]}...${commitRangeMatch[3]}`,
       text: commitRangeMatch[0],
       className: 'gfm gfm-commit_range',
+      isUrl: false,
     };
   }
 
@@ -245,6 +254,7 @@ export function parseGitlabReference(
       href: `${proj}/-/commit/${commitMatch[2]}`,
       text: commitMatch[0],
       className: 'gfm gfm-commit',
+      isUrl: false,
     };
   }
 
@@ -258,6 +268,7 @@ export function parseGitlabReference(
       href: `${cleanBaseUrl}/${target}`,
       text: mentionMatch[0],
       className: 'gfm gfm-project_member',
+      isUrl: false,
     };
   }
 
@@ -280,6 +291,7 @@ export function parseGitlabReference(
       text: itemMatch[0],
       className: `gfm gfm-${info.kind}`,
       title: suffix ? `Show ${info.kind} ${suffix === '+s' ? 'summary' : 'title'}` : undefined,
+      isUrl: false,
     };
   }
 
@@ -296,6 +308,7 @@ export function parseGitlabReference(
       href: `${proj}/-/issues?label_name=${encodeURIComponent(name)}`,
       text: labelMatch[0],
       className: 'gfm gfm-label',
+      isUrl: false,
     };
   }
 
@@ -313,6 +326,7 @@ export function parseGitlabReference(
       text: milestoneMatch[0],
       className: 'gfm gfm-milestone',
       title: name,
+      isUrl: false,
     };
   }
 

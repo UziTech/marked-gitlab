@@ -301,8 +301,7 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
         }
       },
       renderer(token: Tokens.Generic) {
-        const tag = token.diffType === 'addition' ? 'ins' : 'del';
-        return `<${tag} class="diff ${token.diffType}">${this.parser.parseInline(token.tokens!)}</${tag}>`;
+        return `<span class="idiff left right ${token.diffType}">${this.parser.parseInline(token.tokens!)}</span>`;
       },
     });
   }
@@ -454,11 +453,13 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
         }
 
         if (token.mediaType === 'video') {
-          return `<video src="${escapeHtml(token.href)}" controls${titleAttr}${dimAttrs}><a href="${escapeHtml(token.href)}">${escapeHtml(token.text)}</a></video>`;
+          const mediaTitle = token.title || token.text;
+          return `<span class="media-container video-container"><video src="${escapeHtml(token.href)}" controls preload="metadata" class="gl-rounded-lg" data-setup="{}" data-title="${escapeHtml(mediaTitle)}"${titleAttr}${dimAttrs}><a href="${escapeHtml(token.href)}">${escapeHtml(token.text)}</a></video></span>`;
         }
 
         if (token.mediaType === 'audio') {
-          return `<audio src="${escapeHtml(token.href)}" controls${titleAttr}><a href="${escapeHtml(token.href)}">${escapeHtml(token.text)}</a></audio>`;
+          const mediaTitle = token.title || token.text;
+          return `<span class="media-container audio-container"><audio src="${escapeHtml(token.href)}" controls data-setup="{}" data-title="${escapeHtml(mediaTitle)}"${titleAttr}><a href="${escapeHtml(token.href)}">${escapeHtml(token.text)}</a></audio></span>`;
         }
 
         return `<img src="${escapeHtml(token.href)}" alt="${escapeHtml(token.text)}"${titleAttr}${dimAttrs}>`;
@@ -521,16 +522,21 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
           return {
             type: 'gitlabReference',
             raw: ref.raw,
+            refType: ref.type,
             href: ref.href,
             text: ref.text,
             className: ref.className,
             title: ref.title,
+            isUrl: ref.isUrl,
           };
         }
       },
       renderer(token: Tokens.Generic) {
         const titleAttr = token.title ? ` title="${escapeHtml(token.title)}"` : '';
-        return `<a href="${escapeHtml(token.href)}" class="${token.className}"${titleAttr}>${escapeHtml(token.text)}</a>`;
+        const refTypeAttr = ` data-reference-type="${escapeHtml(token.refType)}"`;
+        const originalAttr = ` data-original="${escapeHtml(token.raw)}"`;
+        const linkAttr = ` data-link="${token.isUrl ? 'true' : 'false'}"`;
+        return `<a href="${escapeHtml(token.href)}" class="${token.className}"${refTypeAttr}${originalAttr}${linkAttr}${titleAttr}>${escapeHtml(token.text)}</a>`;
       },
     });
   }
@@ -584,7 +590,7 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
       },
       renderer(token: Tokens.Generic) {
         const id = token.identifier;
-        return `<sup class="footnote-ref"><a href="#fn-${escapeHtml(id)}" id="fnref-${escapeHtml(id)}">${token.index}</a></sup>`;
+        return `<sup class="footnote-ref"><a href="#fn-${escapeHtml(id)}" id="fnref-${escapeHtml(id)}" data-footnote-ref>${token.index}</a></sup>`;
       },
     });
 
@@ -630,7 +636,8 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
         let html = '<section class="footnotes" data-footnotes>\n<ol>\n';
         for (const [id, def] of sortedEntries) {
           const content = this.parser.parse(def.tokens).replace(/^\s*<p>|<\/p>\s*$/g, '');
-          html += `<li id="fn-${escapeHtml(id)}">\n<p>${content} <a href="#fnref-${escapeHtml(id)}" class="footnote-backref">↩</a></p>\n</li>\n`;
+          const index = order.get(id) ?? id;
+          html += `<li id="fn-${escapeHtml(id)}">\n<p>${content} <a href="#fnref-${escapeHtml(id)}" class="footnote-backref" data-footnote-backref aria-label="Back to reference ${index}">↩</a></p>\n</li>\n`;
         }
         html += '</ol>\n</section>\n';
         return html;
@@ -850,7 +857,10 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
           return false;
         }
         const slug = (token as CustomHeading).anchor!;
-        return `<h${token.depth} id="${slug}">${this.parser.parseInline(token.tokens)}</h${token.depth}>\n`;
+        const content = this.parser.parseInline(token.tokens);
+        const rawText = token.text;
+        const anchor = `<a href="#${slug}" aria-label="Link to heading '${escapeHtml(rawText)}'" data-heading-content="${escapeHtml(rawText)}" class="anchor"></a>`;
+        return `<h${token.depth} id="${slug}">${content}${anchor}</h${token.depth}>\n`;
       },
 
       codespan(token: Tokens.Codespan) {

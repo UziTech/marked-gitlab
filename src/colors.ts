@@ -19,7 +19,7 @@ export function renderColorCode(text: string): string | false {
   }
 
   if (isColorCode(text)) {
-    return `<code><span class="gl-color-chip" style="background-color: ${text};"></span>${text}</code>`;
+    return `<code>${text}<span class="gfm-color_chip"><span style="background-color: ${text};"></span></span></code>`;
   }
 
   return false;
