@@ -387,6 +387,9 @@ interface MarkedGitlabOptions {
   /** Enable task lists including [~] inapplicable items (default: true) */
   taskLists?: boolean;
 
+  /** Enable task checkboxes inside table cells (default: true) */
+  taskTables?: boolean;
+
   /** Enable GitLab special references (default: true) */
   references?: boolean;
 
