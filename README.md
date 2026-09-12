@@ -5,6 +5,8 @@ A [Marked](https://marked.js.org/) extension for [GitLab Flavored Markdown (GLFM
 [![npm version](https://badge.fury.io/js/marked-gitlab.svg)](https://badge.fury.io/js/marked-gitlab)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+> **Note:** This project was almost entirely vibe coded. If you find something that doesn't match GitLab's rendering or is otherwise broken, please [open an issue](https://github.com/UziTech/marked-gitlab/issues) or submit a PR!
+
 ## Installation
 
 ```sh
@@ -423,6 +425,247 @@ interface MarkedGitlabOptions {
   /** Handler for ::include{file=...} directives */
   includeHandler?: (file: string) => string | undefined;
 }
+```
+
+---
+
+## Client-Side Rendering & Stylesheets
+
+`marked-gitlab` parses GitLab Flavored Markdown into semantic HTML matching GitLab's DOM structure. Some visual and interactive features (such as math formulas, diagrams, color chips, and alerts) require client-side libraries or CSS styles to render fully in the browser.
+
+### Math Equations (KaTeX / MathJax)
+
+`marked-gitlab` outputs `<span class="gl-math-inline">` for inline formulas and `<div class="gl-math-block">` for display formulas. You can render them using [KaTeX](https://katex.org/) or [MathJax](https://www.mathjax.org/):
+
+```html
+<!-- KaTeX Stylesheet & Script -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+
+<script>
+function renderMath(container = document.body) {
+  // Inline math: $`...`$ or \(...\)
+  container.querySelectorAll('.gl-math-inline').forEach((el) => {
+    katex.render(el.textContent, el, { displayMode: false, throwOnError: false });
+  });
+
+  // Display math: ```math or $$...$$ or \[...\]
+  container.querySelectorAll('.gl-math-block').forEach((el) => {
+    katex.render(el.textContent, el, { displayMode: true, throwOnError: false });
+  });
+}
+</script>
+```
+
+### Diagrams (Mermaid, PlantUML & Kroki)
+
+`marked-gitlab` wraps diagram blocks in `<pre class="mermaid">`, `<pre class="plantuml">`, or `<pre class="kroki">`.
+
+#### Mermaid
+
+Use [Mermaid](https://mermaid.js.org/) to render `<pre class="mermaid">` blocks into interactive SVG diagrams:
+
+```html
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: false });
+
+  // Render all mermaid code blocks
+  await mermaid.run({
+    nodes: document.querySelectorAll('pre.mermaid'),
+  });
+</script>
+```
+
+#### PlantUML & Kroki
+
+PlantUML and Kroki diagrams can be rendered via [Kroki's API](https://kroki.io/) or your own PlantUML server:
+
+```js
+// Replace <pre class="kroki"> or <pre class="plantuml"> blocks with rendered SVGs via Kroki
+document.querySelectorAll('pre.plantuml, pre.kroki').forEach(async (pre) => {
+  const type = pre.classList.contains('plantuml') ? 'plantuml' : pre.dataset.diagramType || 'plantuml';
+  const code = pre.querySelector('code')?.textContent || pre.textContent;
+
+  const res = await fetch(`https://kroki.io/${type}/svg`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: code,
+  });
+  if (res.ok) {
+    const div = document.createElement('div');
+    div.className = `${type}-diagram`;
+    div.innerHTML = await res.text();
+    pre.replaceWith(div);
+  }
+});
+```
+
+### Recommended Stylesheet
+
+GitLab uses specific classes for alerts, color chips, inline diffs, and task lists. You can use GitLab's official [`@gitlab/ui`](https://gitlab-org.gitlab.io/gitlab-ui/) CSS or add these minimal styles:
+
+```css
+/* Color Chips */
+.gfm-color_chip {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+.gfm-color_chip > span {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 2px;
+}
+
+/* Inline Diffs */
+.idiff.addition {
+  background-color: #d4edda;
+  color: #155724;
+  text-decoration: none;
+}
+.idiff.deletion {
+  background-color: #f8d7da;
+  color: #721c24;
+  text-decoration: line-through;
+}
+
+/* Markdown Alerts */
+.markdown-alert {
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border-left: 4px solid #1f75cb;
+  background-color: #f0f6fc;
+  border-radius: 0 4px 4px 0;
+}
+.markdown-alert-title {
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+.markdown-alert-note      { border-left-color: #1f75cb; background-color: #f0f6fc; }
+.markdown-alert-tip       { border-left-color: #108548; background-color: #ecfdf3; }
+.markdown-alert-warning   { border-left-color: #c17d10; background-color: #fef7ed; }
+.markdown-alert-caution   { border-left-color: #dd2b0e; background-color: #fdf2f2; }
+.markdown-alert-important { border-left-color: #7b58cf; background-color: #fbf8ff; }
+
+/* Task Lists */
+.task-list-item {
+  list-style-type: none;
+}
+.task-list-item-checkbox {
+  margin: 0 0.35em 0.25em -1.4em;
+  vertical-align: middle;
+}
+.task-list-item:has([data-inapplicable="true"]) {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+th.task-table-item,
+td.task-table-item {
+  white-space: nowrap;
+}
+
+/* JSON Tables */
+.gl-table.gl-json-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.gl-table.gl-json-table th,
+.gl-table.gl-json-table td {
+  border: 1px solid #dbdbdb;
+  padding: 8px 12px;
+}
+.gl-table.gl-json-table caption {
+  font-weight: bold;
+  text-align: left;
+  padding: 8px 0;
+}
+```
+
+### Complete Browser Example
+
+Here is a full working example combining `marked`, `marked-gitlab`, KaTeX, Mermaid, and styles:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>marked-gitlab Browser Demo</title>
+
+  <!-- KaTeX CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+    .gfm-color_chip { display: inline-flex; vertical-align: middle; margin-left: 4px; }
+    .gfm-color_chip > span { display: inline-block; width: 12px; height: 12px; border: 1px solid rgba(0,0,0,0.2); border-radius: 2px; }
+    .idiff.addition { background-color: #d4edda; color: #155724; }
+    .idiff.deletion { background-color: #f8d7da; color: #721c24; text-decoration: line-through; }
+    .markdown-alert { padding: 12px 16px; margin: 16px 0; border-left: 4px solid #1f75cb; background-color: #f0f6fc; border-radius: 0 4px 4px 0; }
+    .markdown-alert-title { font-weight: 600; margin-top: 0; margin-bottom: 4px; }
+    .task-list-item { list-style-type: none; }
+    .task-list-item-checkbox { margin: 0 0.35em 0.25em -1.4em; vertical-align: middle; }
+    .task-list-item:has([data-inapplicable="true"]) { text-decoration: line-through; opacity: 0.6; }
+  </style>
+</head>
+<body>
+  <div id="content"></div>
+
+  <!-- Marked & marked-gitlab -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked-gitlab/lib/index.umd.js"></script>
+
+  <!-- KaTeX -->
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: false });
+
+    const markedInstance = new marked.Marked();
+    markedInstance.use(markedGitlab({ project: 'gitlab-org/gitlab' }));
+
+    const md = `
+# GLFM Preview
+
+> [!TIP]
+> Alerts, math, and diagrams render with client libraries and styles!
+
+Inline formula: $a^2 + b^2 = c^2$
+
+\`\`\`math
+\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}
+\`\`\`
+
+\`\`\`mermaid
+graph TD
+  A[Markdown] --> B[marked-gitlab HTML]
+  B --> C[Client-side Renderers]
+\`\`\`
+
+Colors: \`#FF5733\` and \`rgb(0, 128, 255)\`
+    `;
+
+    const container = document.getElementById('content');
+    container.innerHTML = markedInstance.parse(md);
+
+    // 1. Render KaTeX math
+    container.querySelectorAll('.gl-math-inline').forEach((el) => {
+      katex.render(el.textContent, el, { displayMode: false, throwOnError: false });
+    });
+    container.querySelectorAll('.gl-math-block').forEach((el) => {
+      katex.render(el.textContent, el, { displayMode: true, throwOnError: false });
+    });
+
+    // 2. Render Mermaid diagrams
+    await mermaid.run({ nodes: container.querySelectorAll('pre.mermaid') });
+  </script>
+</body>
+</html>
 ```
 
 ---
