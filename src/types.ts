@@ -50,6 +50,11 @@ export interface MarkedGitlabOptions {
   taskLists?: boolean;
 
   /**
+   * Enable task checkboxes inside table cells (default: true)
+   */
+  taskTables?: boolean;
+
+  /**
    * Enable GitLab-specific references like `#123`, `@user`, `!123` (default: true)
    */
   references?: boolean;

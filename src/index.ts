@@ -111,6 +111,7 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
     tableOfContents = true,
     headingAnchors = true,
     taskLists = true,
+    taskTables = true,
     references = true,
     multimedia = true,
     diagrams = true,
@@ -758,7 +759,7 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
             }
 
             // Task list checkboxes in table cells: | [x] | or | [ ] | or | [~] |
-            if (taskLists && tok.type === 'table') {
+            if (taskTables && tok.type === 'table') {
               const table = tok as Tokens.Table;
               const processCell = (cell: Tokens.TableCell) => {
                 if (cell.tokens?.length === 1 && cell.tokens[0]?.type === 'text') {
@@ -889,7 +890,7 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
       },
 
       tablecell(cell: Tokens.TableCell) {
-        if (!taskLists) {
+        if (!taskTables) {
           return false;
         }
         if ((cell as CustomTableCell).taskTableItem) {

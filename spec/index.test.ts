@@ -393,10 +393,20 @@ describe('marked-gitlab', () => {
     test('taskLists can be disabled in options', (t) => {
       const marked = new Marked();
       marked.use(markedGitlab({ taskLists: false }));
-      const html = marked.parse('- [x] Task\n\n| [x] |\n| --- |\n| 1 |') as string;
+      const html = marked.parse('- [x] Task') as string;
       t.assert.match(html, /<input/);
-      t.assert.doesNotMatch(html, /task-table-item/);
-      t.assert.doesNotMatch(html, /<th><input/);
+    });
+
+    test('taskTables can be disabled independently from taskLists', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ taskTables: false }));
+      const listHtml = marked.parse('- [x] Task\n- [~] Inapplicable') as string;
+      t.assert.match(listHtml, /task-list-item/);
+      t.assert.match(listHtml, /data-inapplicable/);
+
+      const tableHtml = marked.parse('| [x] |\n| --- |\n| [ ] |') as string;
+      t.assert.doesNotMatch(tableHtml, /task-table-item/);
+      t.assert.doesNotMatch(tableHtml, /<input/);
     });
   });
 
