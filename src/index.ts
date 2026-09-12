@@ -5,10 +5,12 @@ import type { MarkedGitlabOptions } from './types.ts';
 import { generateGitlabSlug } from './slug.ts';
 import { renderColorCode, isColorCode } from './colors.ts';
 import { parseGitlabReference } from './references.ts';
-import { renderEmoji, DEFAULT_EMOJIS } from './emojis.ts';
+import { renderEmoji, DEFAULT_EMOJIS, EMOJI_DATA } from './emojis.ts';
+import type { EmojiEntry } from './emojis.ts';
 
 export type { MarkedGitlabOptions };
-export { generateGitlabSlug, renderColorCode, isColorCode, parseGitlabReference, renderEmoji, DEFAULT_EMOJIS };
+export { generateGitlabSlug, renderColorCode, isColorCode, parseGitlabReference, renderEmoji, DEFAULT_EMOJIS, EMOJI_DATA };
+export type { EmojiEntry };
 
 interface CustomHeading extends Tokens.Heading {
   anchor?: string;
@@ -89,7 +91,7 @@ function renderToc(headings: Array<{ depth: number; text: string; slug: string }
   return html;
 }
 
-const VIDEO_EXTENSIONS = new Set(['.mp4', '.m4v', '.mov', '.webm', '.ogv']);
+const VIDEO_EXTENSIONS = new Set(['.mp4', '.m4v', '.mov', '.webm', '.ogv', '.3gp']);
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.oga', '.ogg', '.spx', '.wav']);
 const ALERT_TYPES = new Set(['note', 'tip', 'important', 'caution', 'warning']);
 
@@ -111,12 +113,14 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
     math = true,
     jsonTables = true,
     frontMatter = true,
+    footnotes = true,
     placeholders = {},
     emojis = true,
     includeHandler,
   } = options;
 
   let currentHeadings: Array<{ depth: number; text: string; slug: string }> = [];
+  let footnoteDefinitions: Map<string, { tokens: Token[] }> = new Map();
 
   const extensions: NonNullable<MarkedExtension['extensions']> = [];
 
@@ -332,12 +336,17 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
       name: 'inlineMath',
       level: 'inline',
       start(src) {
-        return src.indexOf('$');
+        const dollar = src.indexOf('$');
+        const backslash = src.indexOf('\\(');
+        if (dollar === -1) return backslash === -1 ? undefined : backslash;
+        if (backslash === -1) return dollar;
+        return Math.min(dollar, backslash);
       },
       tokenizer(src) {
-        const match = src.match(/^(?:\$`([^`]+)`\$|\$\$([^$]+)\$\$|\$([^$\r\n]+)\$)/);
+        // $`...`$, $$...$$, $...$, \(...\)
+        const match = src.match(/^(?:\$`([^`]+)`\$|\$\$([^$]+)\$\$|\$([^$\r\n]+)\$|\\\(([\s\S]*?)\\\))/);
         if (match) {
-          const mathExpr = match[1] ?? match[2] ?? match[3];
+          const mathExpr = match[1] ?? match[2] ?? match[3] ?? match[4];
           return {
             type: 'inlineMath',
             raw: match[0],
@@ -347,6 +356,28 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
       },
       renderer(token: Tokens.Generic) {
         return `<span class="gl-math-inline" data-math-style="inline">${escapeHtml(token.math)}</span>`;
+      },
+    });
+
+    // Display math: \[...\]
+    extensions.push({
+      name: 'displayMath',
+      level: 'block',
+      start(src) {
+        return src.indexOf('\\[');
+      },
+      tokenizer(src) {
+        const match = src.match(/^\\\[([\s\S]*?)\\\](?:\r?\n|$)/);
+        if (match) {
+          return {
+            type: 'displayMath',
+            raw: match[0],
+            math: match[1].trim(),
+          };
+        }
+      },
+      renderer(token: Tokens.Generic) {
+        return `<div class="gl-math-block" data-math-style="display">${escapeHtml(token.math)}</div>\n`;
       },
     });
   }
@@ -525,6 +556,73 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
     });
   }
 
+  // Footnote reference (inline): [^identifier]
+  if (footnotes) {
+    extensions.push({
+      name: 'footnoteRef',
+      level: 'inline',
+      start(src) {
+        return src.indexOf('[^');
+      },
+      tokenizer(src) {
+        const match = src.match(/^\[\^([^\]]+)\]/);
+        if (match) {
+          return {
+            type: 'footnoteRef',
+            raw: match[0],
+            identifier: match[1],
+          };
+        }
+      },
+      renderer(token: Tokens.Generic) {
+        const id = token.identifier;
+        return `<sup class="footnote-ref"><a href="#fn-${escapeHtml(id)}" id="fnref-${escapeHtml(id)}">${escapeHtml(id)}</a></sup>`;
+      },
+    });
+
+    // Footnote definition (block): [^identifier]: content
+    extensions.push({
+      name: 'footnoteDef',
+      level: 'block',
+      start(src) {
+        return src.search(/^\[\^/m);
+      },
+      tokenizer(src) {
+        const match = src.match(/^\[\^([^\]]+)\]:[ \t]+([^\n]+(?:\n(?!\[\^|\n)[^\n]+)*)(?:\r?\n|$)/);
+        if (match) {
+          const tokens: Token[] = [];
+          this.lexer.blockTokens(match[2].trim(), tokens);
+          return {
+            type: 'footnoteDef',
+            raw: match[0],
+            identifier: match[1],
+            tokens,
+          };
+        }
+      },
+      renderer() {
+        // Definitions are collected and rendered as a section at the end
+        return '';
+      },
+    });
+
+    // Footnote section (synthetic block injected at end of document)
+    extensions.push({
+      name: 'footnoteSection',
+      level: 'block',
+      renderer(token: Tokens.Generic) {
+        const defs = token.definitions as Map<string, { tokens: Token[] }>;
+        let html = '<section class="footnotes" data-footnotes>\n<ol>\n';
+        for (const [id, def] of defs) {
+          const content = this.parser.parse(def.tokens).replace(/^\s*<p>|<\/p>\s*$/g, '');
+          html += `<li id="fn-${escapeHtml(id)}">\n<p>${content} <a href="#fnref-${escapeHtml(id)}" class="footnote-backref">↩</a></p>\n</li>\n`;
+        }
+        html += '</ol>\n</section>\n';
+        return html;
+      },
+    });
+  }
+
   return {
     extensions,
     hooks: {
@@ -645,6 +743,31 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
           }
         };
         assignToc(tokens);
+
+        // Collect footnote definitions and append footnote section
+        if (footnotes) {
+          footnoteDefinitions = new Map();
+          const collectFootnotes = (toks: Token[]) => {
+            for (const tok of toks) {
+              if (tok.type === 'footnoteDef') {
+                const ft = tok as Tokens.Generic;
+                footnoteDefinitions.set(ft.identifier, { tokens: ft.tokens! });
+              }
+              if ('tokens' in tok && Array.isArray(tok.tokens)) {
+                collectFootnotes(tok.tokens);
+              }
+            }
+          };
+          collectFootnotes(tokens);
+
+          if (footnoteDefinitions.size > 0) {
+            tokens.push({
+              type: 'footnoteSection',
+              raw: '',
+              definitions: footnoteDefinitions,
+            } as unknown as Token);
+          }
+        }
 
         return tokens;
       },

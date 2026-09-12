@@ -80,6 +80,11 @@ export interface MarkedGitlabOptions {
   frontMatter?: boolean;
 
   /**
+   * Enable footnotes `[^1]` (default: true)
+   */
+  footnotes?: boolean;
+
+  /**
    * Placeholders map, or false to disable (default: {})
    */
   placeholders?: Record<string, string> | false;

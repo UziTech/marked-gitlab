@@ -167,10 +167,17 @@ Automatically detects audio and video files, and supports dimension attributes `
   ```
   ````
 
-- **Math Equations**: Display blocks using ```` ```math ```` and inline expressions with `$`:
+- **Math Equations**: Display blocks using ```` ```math ```` or `\[...\]`, and inline expressions with `$`, `$`...`$`, `$$...$$`, or `\(...\)`:
 
   ```markdown
   $`a^2 + b^2 = c^2`$
+  \(E = mc^2\)
+  ```
+
+  Display math:
+
+  ```markdown
+  \[x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}\]
   ```
 
 - **JSON Tables**: Render tables directly from JSON data using ```` ```json:table ````:
@@ -221,9 +228,34 @@ Parses GitLab's rich reference syntax into styled links:
 
 Prefix references with `\` to prevent linking (e.g. `\#123`).
 
-### 11. Emojis
+### 11. Footnotes
 
-Converts standard emoji shortcodes into `<gl-emoji>` tags:
+Add footnotes to your content with inline references and definitions:
+
+```markdown
+Something that needs more explanation.[^1]
+
+Another claim.[^note]
+
+[^1]: This is the footnote content.
+[^note]: A named footnote with **formatting**.
+```
+
+Rendered HTML:
+
+```html
+<sup class="footnote-ref"><a href="#fn-1" id="fnref-1">1</a></sup>
+...
+<section class="footnotes" data-footnotes>
+<ol>
+<li id="fn-1"><p>This is the footnote content. <a href="#fnref-1" class="footnote-backref">↩</a></p></li>
+</ol>
+</section>
+```
+
+### 12. Emojis
+
+Converts standard emoji shortcodes from the full [Gemoji](https://github.com/github/gemoji) dataset (~1900 emojis) into `<gl-emoji>` tags:
 
 ```markdown
 :thumbsup: :heart: :rocket:
@@ -232,7 +264,7 @@ Converts standard emoji shortcodes into `<gl-emoji>` tags:
 Rendered HTML:
 
 ```html
-<gl-emoji title="thumbs up" data-name="thumbsup" data-unicode-version="6.0">👍</gl-emoji>
+<gl-emoji data-name="thumbsup" data-unicode-version="6.0" title="thumbs up">👍</gl-emoji>
 ```
 
 ---
@@ -291,11 +323,14 @@ interface MarkedGitlabOptions {
   /** Enable front matter extraction (default: true) */
   frontMatter?: boolean;
 
+  /** Enable footnotes [^1] (default: true) */
+  footnotes?: boolean;
+
   /** Map of placeholder keys to replacement values (e.g. { KEY: 'val' }) */
   placeholders?: Record<string, string>;
 
-  /** Enable emoji shortcodes or provide a custom emoji map (default: true) */
-  emojis?: boolean | Record<string, { emoji: string; title: string }>;
+  /** Enable emoji shortcodes or provide a custom emoji override map (default: true) */
+  emojis?: boolean | Record<string, string>;
 
   /** Handler for ::include{file=...} directives */
   includeHandler?: (file: string) => string | undefined;
@@ -316,6 +351,7 @@ import {
   parseGitlabReference,
   renderEmoji,
   DEFAULT_EMOJIS,
+  EMOJI_DATA,
 } from 'marked-gitlab';
 ```
 

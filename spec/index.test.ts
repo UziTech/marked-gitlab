@@ -6,6 +6,7 @@ import markedGitlab, {
   isColorCode,
   parseGitlabReference,
   renderEmoji,
+  EMOJI_DATA,
 } from '../src/index.ts';
 
 describe('marked-gitlab', () => {
@@ -185,6 +186,19 @@ describe('marked-gitlab', () => {
       t.assert.match(html, /<span class="gl-color-chip" style="background-color: RGBA\(0,255,0,0.3\);"><\/span>RGBA\(0,255,0,0.3\)/);
       t.assert.match(html, /<span class="gl-color-chip" style="background-color: HSL\(540,70%,50%\);"><\/span>HSL\(540,70%,50%\)/);
       t.assert.match(html, /<span class="gl-color-chip" style="background-color: HSLA\(540,70%,50%,0.3\);"><\/span>HSLA\(540,70%,50%,0.3\)/);
+    });
+
+    test('recognizes modern space-separated CSS color syntax', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '- `rgb(255 0 0)`\n- `rgb(255 0 0 / 50%)`\n- `rgb(255 0 0 / 0.5)`\n- `hsl(0 100% 50%)`\n- `hsl(0 100% 50% / 0.5)`';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<span class="gl-color-chip" style="background-color: rgb\(255 0 0\);"><\/span>rgb\(255 0 0\)/);
+      t.assert.match(html, /<span class="gl-color-chip" style="background-color: rgb\(255 0 0 \/ 50%\);"><\/span>rgb\(255 0 0 \/ 50%\)/);
+      t.assert.match(html, /<span class="gl-color-chip" style="background-color: rgb\(255 0 0 \/ 0\.5\);"><\/span>rgb\(255 0 0 \/ 0\.5\)/);
+      t.assert.match(html, /<span class="gl-color-chip" style="background-color: hsl\(0 100% 50%\);"><\/span>hsl\(0 100% 50%\)/);
+      t.assert.match(html, /<span class="gl-color-chip" style="background-color: hsl\(0 100% 50% \/ 0\.5\);"><\/span>hsl\(0 100% 50% \/ 0\.5\)/);
     });
 
     test('escapes color codes with backslash to omit color chip', (t) => {
@@ -374,6 +388,13 @@ describe('marked-gitlab', () => {
       t.assert.match(html, /<video src="img\/video\.mp4" controls><a href="img\/video\.mp4">Sample Video<\/a><\/video>/);
     });
 
+    test('renders .3gp video files', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const html = marked.parse('![3GP Video](clip.3gp)') as string;
+      t.assert.match(html, /<video src="clip\.3gp" controls><a href="clip\.3gp">3GP Video<\/a><\/video>/);
+    });
+
     test('standard images without dimensions or media extensions use standard img', (t) => {
       const marked = new Marked();
       marked.use(markedGitlab());
@@ -411,6 +432,18 @@ describe('marked-gitlab', () => {
       t.assert.match(html, /<span class="gl-math-inline" data-math-style="inline">x\+y=z<\/span>/);
       t.assert.match(html, /<span class="gl-math-inline" data-math-style="inline">a\+b<\/span>/);
       t.assert.match(html, /<span class="gl-math-inline" data-math-style="inline">c\+d<\/span>/);
+    });
+
+    test('renders LaTeX \\(...\\) inline math and \\[...\\] display math', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = 'Inline: \\(x^2\\) and $y^2$ and \\(z^2\\) and display:\n\n\\[E = mc^2\\]';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<span class="gl-math-inline" data-math-style="inline">x\^2<\/span>/);
+      t.assert.match(html, /<span class="gl-math-inline" data-math-style="inline">y\^2<\/span>/);
+      t.assert.match(html, /<span class="gl-math-inline" data-math-style="inline">z\^2<\/span>/);
+      t.assert.match(html, /<div class="gl-math-block" data-math-style="display">E = mc\^2<\/div>/);
     });
 
     test('renders JSON tables with custom fields, caption, sortable, and markdown', (t) => {
@@ -673,8 +706,8 @@ describe('marked-gitlab', () => {
       const input = 'Thumbs up :thumbsup: and a heart :heart:!';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<gl-emoji data-name="thumbsup" title=":thumbsup:">👍<\/gl-emoji>/);
-      t.assert.match(html, /<gl-emoji data-name="heart" title=":heart:">❤️<\/gl-emoji>/);
+      t.assert.match(html, /<gl-emoji data-name="thumbsup" data-unicode-version="6\.0" title="thumbs up">👍<\/gl-emoji>/);
+      t.assert.match(html, /<gl-emoji data-name="heart" title="red heart">❤️<\/gl-emoji>/);
     });
 
     test('supports custom emoji mapping in options', (t) => {
@@ -684,7 +717,7 @@ describe('marked-gitlab', () => {
       const html = marked.parse(input) as string;
 
       t.assert.match(html, /<gl-emoji data-name="custom_fox" title=":custom_fox:">🦊<\/gl-emoji>/);
-      t.assert.match(html, /<gl-emoji data-name="thumbsup" title=":thumbsup:">👍<\/gl-emoji>/);
+      t.assert.match(html, /<gl-emoji data-name="thumbsup" data-unicode-version="6\.0" title="thumbs up">👍<\/gl-emoji>/);
     });
 
     test('unknown emoji code is left unchanged', (t) => {
@@ -706,6 +739,82 @@ describe('marked-gitlab', () => {
 
     test('renderEmoji returns false for missing emoji', (t) => {
       t.assert.equal(renderEmoji('nonexistent_emoji_abc'), false);
+    });
+
+    test('full gemoji dataset is available and has >1800 entries', (t) => {
+      t.assert.ok(Object.keys(EMOJI_DATA).length > 1800, 'EMOJI_DATA should have >1800 entries');
+      t.assert.ok(EMOJI_DATA.wave, ':wave: should exist');
+      t.assert.ok(EMOJI_DATA['100'], ':100: should exist');
+      t.assert.ok(EMOJI_DATA.thinking, ':thinking: should exist');
+    });
+
+    test('renders previously-missing emojis from full dataset', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = ':wave: :100: :thinking:';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<gl-emoji data-name="wave" data-unicode-version/);
+      t.assert.match(html, /<gl-emoji data-name="100" data-unicode-version/);
+      t.assert.match(html, /<gl-emoji data-name="thinking" data-unicode-version/);
+    });
+  });
+
+  describe('footnotes', () => {
+    test('renders footnote references and definitions', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = 'Something important.[^1]\n\n[^1]: This is the footnote content.';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<sup class="footnote-ref"><a href="#fn-1" id="fnref-1">1<\/a><\/sup>/);
+      t.assert.match(html, /<section class="footnotes" data-footnotes>/);
+      t.assert.match(html, /<li id="fn-1">/);
+      t.assert.match(html, /This is the footnote content\./);
+      t.assert.match(html, /<a href="#fnref-1" class="footnote-backref">↩<\/a>/);
+    });
+
+    test('renders multiple footnotes', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = 'First[^1] and second[^2].\n\n[^1]: Footnote one.\n\n[^2]: Footnote two.';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /id="fnref-1"/);
+      t.assert.match(html, /id="fnref-2"/);
+      t.assert.match(html, /id="fn-1"/);
+      t.assert.match(html, /id="fn-2"/);
+      t.assert.match(html, /Footnote one\./);
+      t.assert.match(html, /Footnote two\./);
+    });
+
+    test('renders footnotes with named identifiers', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = 'See note[^note].\n\n[^note]: A named footnote.';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<a href="#fn-note" id="fnref-note">note<\/a>/);
+      t.assert.match(html, /<li id="fn-note">/);
+      t.assert.match(html, /A named footnote\./);
+    });
+
+    test('footnotes can be disabled in options', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ footnotes: false }));
+      const input = 'Text[^1].\n\n[^1]: Footnote.';
+      const html = marked.parse(input) as string;
+
+      t.assert.doesNotMatch(html, /<section class="footnotes"/);
+      t.assert.doesNotMatch(html, /footnote-ref/);
+    });
+
+    test('no footnote section when there are no definitions', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const html = marked.parse('Just normal text, no footnotes.') as string;
+
+      t.assert.doesNotMatch(html, /<section class="footnotes"/);
     });
   });
 });
