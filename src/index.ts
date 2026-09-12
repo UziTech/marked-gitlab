@@ -347,33 +347,40 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
         // $`...`$, $$...$$, $...$, \(...\)
         const match = src.match(/^(?:\$`([^`]+)`\$|\$\$([^$]+)\$\$|\$([^$\r\n]+)\$|\\\(([\s\S]*?)\\\))/);
         if (match) {
+          const isDisplay = match[2] !== undefined;
           const mathExpr = match[1] ?? match[2] ?? match[3] ?? match[4];
           return {
             type: 'inlineMath',
             raw: match[0],
             math: mathExpr,
+            display: isDisplay,
           };
         }
       },
       renderer(token: Tokens.Generic) {
-        return `<span class="gl-math-inline" data-math-style="inline">${escapeHtml(token.math)}</span>`;
+        const style = token.display ? 'display' : 'inline';
+        return `<span class="gl-math-inline" data-math-style="${style}">${escapeHtml(token.math)}</span>`;
       },
     });
 
-    // Display math: \[...\]
+    // Display math: \[...\] or $$...$$
     extensions.push({
       name: 'displayMath',
       level: 'block',
       start(src) {
-        return src.indexOf('\\[');
+        const m = src.match(/^[ \t]*(?:\\\[|\$\$)/m);
+        return m ? m.index : undefined;
       },
       tokenizer(src) {
-        const match = src.match(/^\\\[([\s\S]*?)\\\](?:\r?\n|$)/);
+        const match = src.match(
+          /^[ \t]*(?:\\\[([\s\S]*?)\\\]|\$\$[ \t]*\r?\n([\s\S]*?)\r?\n\$\$|\$\$([^\$\r\n]+)\$\$)[ \t]*(?:\r?\n|$)/,
+        );
         if (match) {
+          const mathExpr = (match[1] ?? match[2] ?? match[3]).trim();
           return {
             type: 'displayMath',
             raw: match[0],
-            math: match[1].trim(),
+            math: mathExpr,
           };
         }
       },
@@ -466,10 +473,10 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
       level: 'inline',
       start(src) {
         const escIdx = src.search(
-          /\\(?:[@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):|[A-Z]{2,}[A-Z0-9_]*-\d+|(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+>)/,
+          /\\(?:[@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):|[A-Z]{2,}[A-Z0-9_]*-\d+|\/?(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+[>~%]|(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+>)/,
         );
         const sigilIdx = src.search(
-          /[@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):|\[\[|\*iteration:|[A-Z]{2,}[A-Z0-9_]*-\d+|(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+>|https?:\/\/[^\s/]+(?:\/groups)?\/[a-zA-Z0-9_\-.]+\/(?:-\/)?(?:issues|merge_requests|epics|wikis)/,
+          /[@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):|\[\[|\*iteration:|[A-Z]{2,}[A-Z0-9_]*-\d+|\/?(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+>|https?:\/\/[^\s/]+(?:\/groups)?\/[a-zA-Z0-9_\-.]+\/(?:-\/)?(?:issues|merge_requests|epics|wikis)/,
         );
 
         let earliest = -1;
@@ -478,7 +485,7 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
         }
         if (sigilIdx !== -1) {
           const before = src.slice(0, sigilIdx);
-          const projMatch = before.match(/(?:^|[\s(])((?:[a-zA-Z0-9_\-.]+\/)?[a-zA-Z0-9_\-.]+)$/);
+          const projMatch = before.match(/(?:^|[\s(])(\/?(?:[a-zA-Z0-9_\-.]+\/)*[a-zA-Z0-9_\-.]+)$/);
           const startIdx = projMatch ? sigilIdx - projMatch[1].length : sigilIdx;
           if (earliest === -1 || startIdx < earliest) {
             earliest = startIdx;
@@ -499,7 +506,7 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
       },
       tokenizer(src) {
         const escaped = src.match(
-          /^\\(\^alert#\d+|[@#!~$%&]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):[^\]]+\]|[A-Z]{2,}[A-Z0-9_]*-\d+|(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+>)/,
+          /^\\(\^alert#\d+|[@#!~$%&]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):[^\]]+\]|[A-Z]{2,}[A-Z0-9_]*-\d+|\/?(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+[>~%]|(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+>)/,
         );
         if (escaped) {
           return {
@@ -577,7 +584,7 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
       },
       renderer(token: Tokens.Generic) {
         const id = token.identifier;
-        return `<sup class="footnote-ref"><a href="#fn-${escapeHtml(id)}" id="fnref-${escapeHtml(id)}">${escapeHtml(id)}</a></sup>`;
+        return `<sup class="footnote-ref"><a href="#fn-${escapeHtml(id)}" id="fnref-${escapeHtml(id)}">${token.index}</a></sup>`;
       },
     });
 
@@ -613,8 +620,15 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
       level: 'block',
       renderer(token: Tokens.Generic) {
         const defs = token.definitions as Map<string, { tokens: Token[] }>;
+        const order = token.order as Map<string, number>;
+        const sortedEntries = Array.from(defs.entries()).sort(([idA], [idB]) => {
+          const orderA = order.get(idA) ?? Number.MAX_SAFE_INTEGER;
+          const orderB = order.get(idB) ?? Number.MAX_SAFE_INTEGER;
+          return orderA - orderB;
+        });
+
         let html = '<section class="footnotes" data-footnotes>\n<ol>\n';
-        for (const [id, def] of defs) {
+        for (const [id, def] of sortedEntries) {
           const content = this.parser.parse(def.tokens).replace(/^\s*<p>|<\/p>\s*$/g, '');
           html += `<li id="fn-${escapeHtml(id)}">\n<p>${content} <a href="#fnref-${escapeHtml(id)}" class="footnote-backref">↩</a></p>\n</li>\n`;
         }
@@ -654,6 +668,8 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
       processAllTokens(tokens: Token[]) {
         const slugCounts = new Map<string, number>();
         currentHeadings = [];
+        const footnoteOrder = new Map<string, number>();
+        let footnoteCounter = 0;
 
         const walk = (toks: Token[]) => {
           for (let i = 0; i < toks.length; i++) {
@@ -665,6 +681,16 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
               const slug = generateGitlabSlug(h.text, slugCounts);
               h.anchor = slug;
               currentHeadings.push({ depth: h.depth, text: h.text, slug });
+            }
+
+            // Footnote reference index assignment
+            if (footnotes && tok.type === 'footnoteRef') {
+              const ft = tok as Tokens.Generic;
+              if (!footnoteOrder.has(ft.identifier)) {
+                footnoteCounter++;
+                footnoteOrder.set(ft.identifier, footnoteCounter);
+              }
+              ft.index = footnoteOrder.get(ft.identifier);
             }
 
             // Standard blockquote alerts conversion: > [!note]
@@ -720,19 +746,19 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
               }
             }
 
-            // Task list checkboxes in table cells: | - [ ] Task |
+            // Task list checkboxes in table cells: | [x] | or | - [ ] Task |
             if (taskLists && tok.type === 'table') {
               const table = tok as Tokens.Table;
               const processCell = (cell: Tokens.TableCell) => {
                 const first = cell.tokens?.[0];
                 if (first?.type === 'text') {
-                  const match = first.text.match(/^[-*]\s+\[([ x~])\][ \t]*/i);
+                  const match = first.text.match(/^(?:[-*]\s+\[([ x~])\][ \t]*|^\s*\[([ x~])\]\s*$)/i);
                   if (match) {
-                    const mark = match[1].toLowerCase();
+                    const mark = (match[1] ?? match[2]).toLowerCase();
                     const checked = mark === 'x' ? ' checked' : '';
                     const inapp = mark === '~' ? ' data-inapplicable="true"' : '';
-                    const checkboxHtml = `<input type="checkbox" disabled class="task-list-item-checkbox"${checked}${inapp}> `;
-                    const remaining = first.text.slice(match[0].length);
+                    const remaining = match[2] !== undefined ? '' : first.text.slice(match[0].length);
+                    const checkboxHtml = `<input type="checkbox" disabled class="task-list-item-checkbox"${checked}${inapp}>${remaining ? ' ' : ''}`;
                     if (!remaining) {
                       cell.tokens[0] = {
                         type: 'html',
@@ -810,6 +836,7 @@ export default function markedGitlab(options: MarkedGitlabOptions = {}): MarkedE
               type: 'footnoteSection',
               raw: '',
               definitions: footnoteDefinitions,
+              order: footnoteOrder,
             } as unknown as Token);
           }
         }

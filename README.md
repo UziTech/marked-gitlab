@@ -146,14 +146,15 @@ Rendered HTML:
 <li class="task-list-item"><input type="checkbox" disabled class="task-list-item-checkbox"> Incomplete task</li>
 ```
 
-Task lists are also rendered inside Markdown table cells:
+Task lists are also rendered inside Markdown table cells, either directly with `[x]` / `[ ]` / `[~]` or with list markers `- [x]`:
 
 ```markdown
 | Status | Task |
 | :--- | :--- |
-| - [x] | Completed task |
-| - [~] | Inapplicable task |
-| - [ ] | Incomplete task |
+| [x] | Native table checkbox |
+| [~] | Inapplicable table checkbox |
+| [ ] | Incomplete table checkbox |
+| - [x] | Also supports list marker |
 ```
 
 ### 7. Multimedia & Dimensions
@@ -177,16 +178,21 @@ Automatically detects audio and video files, and supports dimension attributes `
   ```
   ````
 
-- **Math Equations**: Display blocks using ```` ```math ```` or `\[...\]`, and inline expressions with `$`, `$`...`$`, `$$...$$`, or `\(...\)`:
+- **Math Equations**: Display blocks using ```` ```math ````, multiline `$$...$$` blocks, or `\[...\]`, and inline expressions with `$`, `$`...`$`, `$$...$$`, or `\(...\)`:
 
   ```markdown
   $`a^2 + b^2 = c^2`$
   \(E = mc^2\)
+  $$a + b$$
   ```
 
-  Display math:
+  Display math blocks:
 
   ```markdown
+  $$
+  a^2 + b^2 = c^2
+  $$
+
   \[x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}\]
   ```
 
@@ -238,15 +244,17 @@ Parses GitLab's rich reference syntax into styled links:
 | `!123` | Merge requests | `!204` |
 | `$123` | Snippets | `$501` |
 | `&123` | Epics | `&301` |
-| `~label` / `~"label name"` | Labels | `~bug`, `~"feature request"` |
-| `%milestone` / `%"milestone"` | Milestones | `%16.0`, `%"Sprint 1"` |
+| `~label` / `proj~label` / `/proj~label` | Labels | `~bug`, `/my/proj~"feature request"` |
+| `%milestone` / `/proj%milestone` | Milestones | `%16.0`, `/my/proj%"Sprint 1"` |
 | `*iteration:"title"` | Iterations | `*iteration:"Q3"` |
 | `[cadence:1]` / `[cadence:"title"]` | Iteration cadences | `[cadence:1]`, `[cadence:"Sprint"]` |
 | `^alert#123` | Alerts | `^alert#45` |
 | `[work_item:123]` | Bracket references | `[work_item:123]`, `[vulnerability:1]` |
+| `[wiki_page:proj:Page#sec]` | Cross-project wikis | `[wiki_page:gitlab-org/gitlab:Home]` |
 | `commit@sha` / 40-char SHA | Commits | `other@9ba12248`, `0123456789abcdef...` |
 | `sha...sha` | Commit comparison | `9ba12248...b19a04f5` |
-| `[[Page]]` / `[[Title\|slug]]` | Wiki pages | `[[User Guide\|user-guide]]` |
+| `[[Page#anchor]]` / `[[Title\|slug#anchor]]` | Wiki pages & anchors | `[[Wiki#setup]]`, `[[User Guide\|user-guide#setup]]` |
+| `.../issues/123` / `.../merge_requests/567` | Base entity URLs | Auto-linked to `#123`, `!567`, `&888` (supports `+` / `+s`) |
 | `.../issues/123#note_456` | Comment URLs | Rendered as `#123 (comment 456)` |
 | `.../issues/123/designs` | Design URLs | Rendered as `#123 (designs)`, `#123[pic.png]` |
 | `.../wikis/Page-Slug` | Wiki URLs | Rendered as `Page Slug` |
@@ -255,7 +263,7 @@ Prefix references with `\` to prevent linking (e.g. `\#123`, `\GL-123`, `\gitlab
 
 ### 11. Footnotes
 
-Add footnotes to your content with inline references and definitions:
+Add footnotes to your content with inline references and definitions. Footnotes are automatically renumbered sequentially (`1`, `2`, `3`...) by appearance order in the document, regardless of whether identifiers are numbers or names:
 
 ```markdown
 Something that needs more explanation.[^1]
@@ -271,9 +279,12 @@ Rendered HTML:
 ```html
 <sup class="footnote-ref"><a href="#fn-1" id="fnref-1">1</a></sup>
 ...
+<sup class="footnote-ref"><a href="#fn-note" id="fnref-note">2</a></sup>
+...
 <section class="footnotes" data-footnotes>
 <ol>
 <li id="fn-1"><p>This is the footnote content. <a href="#fnref-1" class="footnote-backref">↩</a></p></li>
+<li id="fn-note"><p>A named footnote with <strong>formatting</strong>. <a href="#fnref-note" class="footnote-backref">↩</a></p></li>
 </ol>
 </section>
 ```

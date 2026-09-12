@@ -14,7 +14,7 @@ export function parseGitlabReference(
 ): ReferenceMatch | null {
   // Escaped references: e.g. \#123, \@user, \!123, \~label, \%milestone, \&123, \$123, \^alert#123, \GL-123, \group/project>
   if (
-    /^\\([@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):|[A-Z]{2,}[A-Z0-9_]*-\d+|(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+>)/i.test(
+    /^\\([@#!~$%&^]|\[(?:issue|epic|work_item|cadence|vulnerability|feature_flag|contact|wiki_page):|[A-Z]{2,}[A-Z0-9_]*-\d+|\/?(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+[>~%]|(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+>)/i.test(
       src,
     )
   ) {
@@ -36,7 +36,16 @@ export function parseGitlabReference(
     if (kind === 'contact') {
       href = `mailto:${target}`;
     } else if (kind === 'wiki_page') {
-      href = `${projectBase}/-/wikis/${target}`;
+      const [rawTarget, ...hashParts] = target.split('#');
+      const hash = hashParts.length > 0 ? `#${hashParts.join('#')}` : '';
+      const colonIdx = rawTarget.lastIndexOf(':');
+      if (colonIdx !== -1) {
+        const proj = rawTarget.slice(0, colonIdx);
+        const pageSlug = rawTarget.slice(colonIdx + 1);
+        href = `${cleanBaseUrl}/${proj}/-/wikis/${encodeURIComponent(pageSlug)}${hash}`;
+      } else {
+        href = `${projectBase}/-/wikis/${encodeURIComponent(rawTarget)}${hash}`;
+      }
     } else if (kind === 'cadence') {
       const cleanTarget = target.replace(/^"(.*)"$/, '$1');
       const isId = /^\d+$/.test(cleanTarget);
@@ -93,7 +102,7 @@ export function parseGitlabReference(
     };
   }
 
-  // GitLab URL references (comments, designs, wikis)
+  // GitLab URL references (comments, designs, wikis, issues, merge requests, epics)
   const gitlabUrlMatch = src.match(
     /^https?:\/\/[^\s/]+(?:\/groups)?\/((?:(?!-\/)[a-zA-Z0-9_\-.]+\/)*(?!-\/)[a-zA-Z0-9_\-.]+)\/(?:-\/)?(issues|merge_requests|epics|wikis)(?:\/([^\s#?]+))?(?:#note_(\d+))?/,
   );
@@ -103,7 +112,7 @@ export function parseGitlabReference(
     if (punctMatch) {
       rawUrl = rawUrl.slice(0, -punctMatch[0].length);
     }
-    const [, , resource, sub, noteId] = gitlabUrlMatch;
+    const [, projPath, resource, sub, noteId] = gitlabUrlMatch;
     let cleanSub = sub;
     if (punctMatch && cleanSub) {
       cleanSub = cleanSub.replace(/[.,;)]+$/, '');
@@ -111,6 +120,7 @@ export function parseGitlabReference(
     let text = '';
     let type = '';
     let className = '';
+    let title: string | undefined;
 
     if (resource === 'wikis' && cleanSub) {
       type = 'wiki_page';
@@ -122,16 +132,38 @@ export function parseGitlabReference(
       type = resource === 'merge_requests' ? 'merge_request' : resource === 'epics' ? 'epic' : 'issue';
       className = `gfm gfm-${type}`;
       text = `${sigil}${id} (comment ${noteId})`;
-    } else if (resource === 'issues' && cleanSub) {
-      type = 'issue';
-      className = 'gfm gfm-issue';
-      const subParts = cleanSub.split('/');
-      const id = subParts[0];
-      if (subParts[1] === 'designs') {
-        if (subParts[2]) {
-          text = `#${id}[${decodeURIComponent(subParts[2])}]`;
-        } else {
-          text = `#${id} (designs)`;
+    } else if (resource === 'issues' || resource === 'merge_requests' || resource === 'epics') {
+      const sigil = resource === 'merge_requests' ? '!' : resource === 'epics' ? '&' : '#';
+      const kind = resource === 'merge_requests' ? 'merge_request' : resource === 'epics' ? 'epic' : 'issue';
+      type = kind;
+      className = `gfm gfm-${kind}`;
+
+      if (resource === 'issues' && cleanSub?.includes('designs')) {
+        const subParts = cleanSub.split('/');
+        const id = subParts[0];
+        if (subParts[1] === 'designs') {
+          if (subParts[2]) {
+            text = `#${id}[${decodeURIComponent(subParts[2])}]`;
+          } else {
+            text = `#${id} (designs)`;
+          }
+        }
+      } else if (cleanSub) {
+        const idMatch = cleanSub.match(/^(\d+)(\+s|\+)?$/);
+        if (idMatch) {
+          const id = idMatch[1];
+          const suffix = idMatch[2] || '';
+          const isSameProject = Boolean(
+            cleanProject
+              && (projPath === cleanProject
+                || cleanProject.startsWith(`${projPath}/`)
+                || projPath.startsWith(`${cleanProject}/`)),
+          );
+          const prefix = isSameProject ? '' : projPath;
+          text = `${prefix}${sigil}${id}${suffix}`;
+          if (suffix) {
+            title = `Show ${kind.replace('_', ' ')} ${suffix === '+s' ? 'summary' : 'title'}`;
+          }
         }
       }
     }
@@ -143,6 +175,7 @@ export function parseGitlabReference(
         href: rawUrl,
         text,
         className,
+        title,
       };
     }
   }
@@ -151,11 +184,13 @@ export function parseGitlabReference(
   const wikiMatch = src.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/);
   if (wikiMatch) {
     const title = wikiMatch[1];
-    const slug = wikiMatch[2] ?? title;
+    const target = wikiMatch[2] ?? title;
+    const [slug, ...hashParts] = target.split('#');
+    const hash = hashParts.length > 0 ? `#${hashParts.join('#')}` : '';
     return {
       raw: wikiMatch[0],
       type: 'wiki_page',
-      href: `${projectBase}/-/wikis/${encodeURIComponent(slug)}`,
+      href: `${projectBase}/-/wikis/${encodeURIComponent(slug)}${hash}`,
       text: title,
       className: 'gfm gfm-wiki_page',
     };
@@ -248,12 +283,13 @@ export function parseGitlabReference(
     };
   }
 
-  // Label: ~123, ~bug, ~"feature request", ~"scoped::label", proj~label
-  const labelMatch = src.match(/^((?:[a-zA-Z0-9_\-.]+\/)?[a-zA-Z0-9_\-.]+)?~("([^"]+)"|[a-zA-Z0-9_\-.:]+)/);
+  // Label: ~123, ~bug, ~"feature request", ~"scoped::label", proj~label, /proj~label
+  const labelMatch = src.match(/^(\/?[a-zA-Z0-9_\-.]+(?:\/[a-zA-Z0-9_\-.]+)*)?~("([^"]+)"|[a-zA-Z0-9_\-.:]+)/);
   if (labelMatch) {
     const [, projPrefix, , labelName] = labelMatch;
     const name = labelName ?? labelMatch[2];
-    const proj = projPrefix ? `${cleanBaseUrl}/${projPrefix}` : projectBase;
+    const cleanPrefix = projPrefix ? projPrefix.replace(/^\/+|\/+$/g, '') : '';
+    const proj = cleanPrefix ? `${cleanBaseUrl}/${cleanPrefix}` : projectBase;
     return {
       raw: labelMatch[0],
       type: 'label',
@@ -263,12 +299,13 @@ export function parseGitlabReference(
     };
   }
 
-  // Milestone: %123, %v1.23, %"milestone name", proj%123
-  const milestoneMatch = src.match(/^((?:[a-zA-Z0-9_\-.]+\/)?[a-zA-Z0-9_\-.]+)?%("([^"]+)"|[a-zA-Z0-9_\-]+(?:\.[a-zA-Z0-9_\-]+)*)/);
+  // Milestone: %123, %v1.23, %"milestone name", proj%123, /proj%123
+  const milestoneMatch = src.match(/^(\/?[a-zA-Z0-9_\-.]+(?:\/[a-zA-Z0-9_\-.]+)*)?%("([^"]+)"|[a-zA-Z0-9_\-]+(?:\.[a-zA-Z0-9_\-]+)*)/);
   if (milestoneMatch) {
     const [, projPrefix, , msName] = milestoneMatch;
     const name = msName ?? milestoneMatch[2];
-    const proj = projPrefix ? `${cleanBaseUrl}/${projPrefix}` : projectBase;
+    const cleanPrefix = projPrefix ? projPrefix.replace(/^\/+|\/+$/g, '') : '';
+    const proj = cleanPrefix ? `${cleanBaseUrl}/${cleanPrefix}` : projectBase;
     return {
       raw: milestoneMatch[0],
       type: 'milestone',

@@ -352,9 +352,24 @@ describe('marked-gitlab', () => {
       t.assert.match(html, /<th><input type="checkbox" disabled class="task-list-item-checkbox" checked> Done<\/th>/);
       t.assert.match(html, /<th><input type="checkbox" disabled class="task-list-item-checkbox" data-inapplicable="true"> Inapplicable<\/th>/);
       t.assert.match(html, /<th><input type="checkbox" disabled class="task-list-item-checkbox"> Normal<\/th>/);
-      t.assert.match(html, /<td><input type="checkbox" disabled class="task-list-item-checkbox" checked> <\/td>/);
+      t.assert.match(html, /<td><input type="checkbox" disabled class="task-list-item-checkbox" checked><\/td>/);
       t.assert.match(html, /<td><input type="checkbox" disabled class="task-list-item-checkbox"> Task with <strong>bold<\/strong><\/td>/);
       t.assert.match(html, /<td>Plain cell<\/td>/);
+    });
+
+    test('renders native GLFM table cell task lists without list markers', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '| Complete | Task |\n'
+        + '| --- | --- |\n'
+        + '|   [x]   | Refactor the backend |\n'
+        + '|   [ ]   | Refactor the frontend |\n'
+        + '|   [~]   | Inapplicable task |\n';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<td><input type="checkbox" disabled class="task-list-item-checkbox" checked><\/td>\s*<td>Refactor the backend<\/td>/);
+      t.assert.match(html, /<td><input type="checkbox" disabled class="task-list-item-checkbox"><\/td>\s*<td>Refactor the frontend<\/td>/);
+      t.assert.match(html, /<td><input type="checkbox" disabled class="task-list-item-checkbox" data-inapplicable="true"><\/td>\s*<td>Inapplicable task<\/td>/);
     });
 
     test('taskLists can be disabled in options', (t) => {
@@ -447,8 +462,18 @@ describe('marked-gitlab', () => {
 
       t.assert.match(html, /<div class="gl-math-block" data-math-style="display">a\^2\+b\^2=c\^2<\/div>/);
       t.assert.match(html, /<span class="gl-math-inline" data-math-style="inline">x\+y=z<\/span>/);
-      t.assert.match(html, /<span class="gl-math-inline" data-math-style="inline">a\+b<\/span>/);
+      t.assert.match(html, /<span class="gl-math-inline" data-math-style="display">a\+b<\/span>/);
       t.assert.match(html, /<span class="gl-math-inline" data-math-style="inline">c\+d<\/span>/);
+    });
+
+    test('renders $$ display math blocks', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '$$\na^2+b^2=c^2\n$$\n\nand single line block:\n\n$$E = mc^2$$\n';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<div class="gl-math-block" data-math-style="display">a\^2\+b\^2=c\^2<\/div>/);
+      t.assert.match(html, /<div class="gl-math-block" data-math-style="display">E = mc\^2<\/div>/);
     });
 
     test('renders LaTeX \\(...\\) inline math and \\[...\\] display math', (t) => {
@@ -725,9 +750,55 @@ describe('marked-gitlab', () => {
     test('parseGitlabReference returns null for non-references', (t) => {
       t.assert.equal(parseGitlabReference('plain text'), null);
       t.assert.equal(parseGitlabReference('\\#123'), null);
-      t.assert.equal(parseGitlabReference('https://gitlab.com/gitlab-org/gitlab/-/issues/1234'), null);
       t.assert.equal(parseGitlabReference('https://gitlab.com/gitlab-org/gitlab/-/issues'), null);
       t.assert.equal(parseGitlabReference('https://gitlab.com/gitlab-org/gitlab/-/wikis'), null);
+      t.assert.equal(parseGitlabReference('https://example.com/not-gitlab'), null);
+    });
+
+    test('auto-links base GitLab entity URLs with and without default project', (t) => {
+      const markedSame = new Marked();
+      markedSame.use(markedGitlab({ project: 'gitlab-org/gitlab' }));
+      const inputSame = 'Issue https://gitlab.com/gitlab-org/gitlab/-/issues/1234 and MR https://gitlab.com/gitlab-org/gitlab/-/merge_requests/567 and epic https://gitlab.com/groups/gitlab-org/-/epics/888.\n'
+        + 'Extended: https://gitlab.com/gitlab-org/gitlab/-/issues/1234+ and https://gitlab.com/gitlab-org/gitlab/-/issues/1234+s\n'
+        + 'Other: https://gitlab.com/other-org/other-proj/-/issues/999';
+      const htmlSame = markedSame.parse(inputSame) as string;
+
+      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234" class="gfm gfm-issue">#1234<\/a>/);
+      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/merge_requests\/567" class="gfm gfm-merge_request">!567<\/a>/);
+      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/groups\/gitlab-org\/-\/epics\/888" class="gfm gfm-epic">&amp;888<\/a>/);
+      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234\+" class="gfm gfm-issue" title="Show issue title">#1234\+<\/a>/);
+      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234\+s" class="gfm gfm-issue" title="Show issue summary">#1234\+s<\/a>/);
+      t.assert.match(htmlSame, /<a href="https:\/\/gitlab\.com\/other-org\/other-proj\/-\/issues\/999" class="gfm gfm-issue">other-org\/other-proj#999<\/a>/);
+
+      const markedNone = new Marked();
+      markedNone.use(markedGitlab());
+      const htmlNone = markedNone.parse('https://gitlab.com/gitlab-org/gitlab/-/issues/1234') as string;
+      t.assert.match(htmlNone, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\/1234" class="gfm gfm-issue">gitlab-org\/gitlab#1234<\/a>/);
+    });
+
+    test('supports cross-project wiki page references and wiki fragment anchors', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab({ project: 'my/proj' }));
+      const input = '[wiki_page:gitlab-org/gitlab:Home] and [wiki_page:group1/subgroup:Guide#intro] and [[Wiki#section]] and [[Custom Title|Page#anchor]].';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/wikis\/Home" class="gfm gfm-wiki_page">\[wiki_page:gitlab-org\/gitlab:Home\]<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/group1\/subgroup\/-\/wikis\/Guide#intro" class="gfm gfm-wiki_page">\[wiki_page:group1\/subgroup:Guide#intro\]<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/wikis\/Wiki#section" class="gfm gfm-wiki_page">Wiki#section<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/my\/proj\/-\/wikis\/Page#anchor" class="gfm gfm-wiki_page">Custom Title<\/a>/);
+    });
+
+    test('supports leading slash on project prefixes for labels and milestones', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '/gitlab-org/gitlab~bug and /gitlab-org/gitlab~"feature request" and /gitlab-org/gitlab%16.0 and \\/gitlab-org/gitlab~escaped';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\?label_name=bug" class="gfm gfm-label">\/gitlab-org\/gitlab~bug<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/issues\?label_name=feature%20request" class="gfm gfm-label">\/gitlab-org\/gitlab~&quot;feature request&quot;<\/a>/);
+      t.assert.match(html, /<a href="https:\/\/gitlab\.com\/gitlab-org\/gitlab\/-\/milestones" class="gfm gfm-milestone" title="16\.0">\/gitlab-org\/gitlab%16\.0<\/a>/);
+      t.assert.match(html, /\/gitlab-org\/gitlab~escaped/);
+      t.assert.doesNotMatch(html, /label_name=escaped/);
     });
 
     test('parses cross-project references and standalone commit SHAs', (t) => {
@@ -846,15 +917,48 @@ describe('marked-gitlab', () => {
       t.assert.match(html, /Footnote two\./);
     });
 
-    test('renders footnotes with named identifiers', (t) => {
+    test('renders footnotes with named identifiers renumbered sequentially', (t) => {
       const marked = new Marked();
       marked.use(markedGitlab());
       const input = 'See note[^note].\n\n[^note]: A named footnote.';
       const html = marked.parse(input) as string;
 
-      t.assert.match(html, /<a href="#fn-note" id="fnref-note">note<\/a>/);
+      t.assert.match(html, /<a href="#fn-note" id="fnref-note">1<\/a>/);
       t.assert.match(html, /<li id="fn-note">/);
       t.assert.match(html, /A named footnote\./);
+    });
+
+    test('renumbers and orders footnotes sequentially by appearance order', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = 'Alpha[^beta] and omega[^alpha].\n\n[^alpha]: Definition Alpha.\n\n[^beta]: Definition Beta.';
+      const html = marked.parse(input) as string;
+
+      // In text, [^beta] appears first -> numbered 1, [^alpha] appears second -> numbered 2
+      t.assert.match(html, /<sup class="footnote-ref"><a href="#fn-beta" id="fnref-beta">1<\/a><\/sup>/);
+      t.assert.match(html, /<sup class="footnote-ref"><a href="#fn-alpha" id="fnref-alpha">2<\/a><\/sup>/);
+
+      // Section order should match appearance order (beta first, alpha second)
+      const betaIdx = html.indexOf('<li id="fn-beta">');
+      const alphaIdx = html.indexOf('<li id="fn-alpha">');
+      t.assert.ok(betaIdx !== -1 && alphaIdx !== -1, 'Both definitions should be present');
+      t.assert.ok(betaIdx < alphaIdx, 'Footnote section should order definitions by appearance order');
+    });
+
+    test('handles unreferenced footnote definitions', (t) => {
+      const marked = new Marked();
+      marked.use(markedGitlab());
+      const input = '[^unref1]: Unreferenced one.\n\nOnly one ref[^first].\n\n[^first]: First def.\n\n[^unref2]: Unreferenced two.';
+      const html = marked.parse(input) as string;
+
+      t.assert.match(html, /<li id="fn-first">/);
+      t.assert.match(html, /<li id="fn-unref1">/);
+      t.assert.match(html, /<li id="fn-unref2">/);
+      const firstIdx = html.indexOf('<li id="fn-first">');
+      const unref1Idx = html.indexOf('<li id="fn-unref1">');
+      const unref2Idx = html.indexOf('<li id="fn-unref2">');
+      t.assert.ok(firstIdx < unref1Idx, 'Referenced footnotes should sort before unreferenced ones');
+      t.assert.ok(firstIdx < unref2Idx, 'Referenced footnotes should sort before unreferenced ones');
     });
 
     test('footnotes can be disabled in options', (t) => {
