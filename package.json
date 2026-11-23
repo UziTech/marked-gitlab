@@ -64,7 +64,7 @@
     "esbuild-plugin-umd-wrapper": "^3.0.0",
     "eslint": "^10.15.0",
     "jiti": "^2.7.0",
-    "marked": "^18.2.0",
+    "marked": "^18.2.1",
     "semantic-release": "^26.0.1",
     "typescript": "^6.0.3"
   },
